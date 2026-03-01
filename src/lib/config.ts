@@ -35,7 +35,7 @@ const envSchema = z.object({
   MIN_RECHARGE_AMOUNT: z.string().default('1').transform(Number).pipe(z.number().positive()),
   MAX_RECHARGE_AMOUNT: z.string().default('1000').transform(Number).pipe(z.number().positive()),
   // 每日每用户最大累计充值额，0 = 不限制
-  MAX_DAILY_RECHARGE_AMOUNT: z.string().default('0').transform(Number).pipe(z.number().min(0)),
+  MAX_DAILY_RECHARGE_AMOUNT: z.string().default('10000').transform(Number).pipe(z.number().min(0)),
   PRODUCT_NAME: z.string().default('Sub2API Balance Recharge'),
 
   ADMIN_TOKEN: z.string().min(1),
