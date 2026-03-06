@@ -1,4 +1,5 @@
 import WxPay from 'wechatpay-node-v3';
+import crypto from 'crypto';
 import { getEnv } from '@/lib/config';
 import type { WxpayPcOrderParams, WxpayH5OrderParams, WxpayRefundParams } from './types';
 
@@ -144,12 +145,14 @@ export async function verifyNotifySign(params: {
   serial: string;
   signature: string;
 }): Promise<boolean> {
-  const pay = getPayInstance();
-  return pay.verifySign({
-    timestamp: params.timestamp,
-    nonce: params.nonce,
-    body: params.body,
-    serial: params.serial,
-    signature: params.signature,
-  });
+  const env = getEnv();
+  if (!env.WXPAY_PUBLIC_KEY) {
+    throw new Error('WXPAY_PUBLIC_KEY is required for signature verification');
+  }
+
+  // 微信支付公钥模式：直接用公钥验签，不拉取平台证书
+  const message = `${params.timestamp}\n${params.nonce}\n${params.body}\n`;
+  const verify = crypto.createVerify('RSA-SHA256');
+  verify.update(message);
+  return verify.verify(env.WXPAY_PUBLIC_KEY, params.signature, 'base64');
 }

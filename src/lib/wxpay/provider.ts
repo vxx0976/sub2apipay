@@ -107,6 +107,12 @@ export class WxpayProvider implements PaymentProvider {
     if (!timestamp || !nonce || !signature || !serial) {
       throw new Error('Missing required Wechatpay signature headers');
     }
+
+    // 验证 serial 匹配我们配置的公钥 ID
+    if (env.WXPAY_PUBLIC_KEY_ID && serial !== env.WXPAY_PUBLIC_KEY_ID) {
+      throw new Error(`Wxpay serial mismatch: expected ${env.WXPAY_PUBLIC_KEY_ID}, got ${serial}`);
+    }
+
     const valid = await verifyNotifySign({ timestamp, nonce, body, serial, signature });
     if (!valid) {
       throw new Error('Wxpay notification signature verification failed');
