@@ -15,6 +15,7 @@ function ResultContent() {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInPopup, setIsInPopup] = useState(false);
+  const [countdown, setCountdown] = useState(5);
 
   // Detect if opened as a popup window (from stripe-popup or via popup=1 param)
   useEffect(() => {
@@ -53,16 +54,35 @@ function ResultContent() {
     };
   }, [outTradeNo]);
 
-  // Auto-close popup window on success
   const isSuccess = status === 'COMPLETED' || status === 'PAID' || status === 'RECHARGING';
 
-  useEffect(() => {
-    if (!isInPopup || !isSuccess) return;
-    const timer = setTimeout(() => {
+  const goBack = () => {
+    if (isInPopup) {
       window.close();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [isInPopup, isSuccess]);
+    } else if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.close();
+    }
+  };
+
+  // Countdown auto-return on success
+  useEffect(() => {
+    if (!isSuccess) return;
+    setCountdown(5);
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          goBack();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuccess, isInPopup]);
 
   if (loading) {
     return (
@@ -91,35 +111,31 @@ function ResultContent() {
             <p className={isDark ? 'mt-2 text-slate-400' : 'mt-2 text-gray-500'}>
               {status === 'COMPLETED' ? '余额已成功到账！' : '支付成功，余额正在充值中...'}
             </p>
-            {isInPopup && (
-              <div className="mt-4 space-y-2">
-                <p className={isDark ? 'text-sm text-slate-500' : 'text-sm text-gray-400'}>
-                  此窗口将在 3 秒后自动关闭
-                </p>
-                <button
-                  type="button"
-                  onClick={() => window.close()}
-                  className="text-sm text-blue-600 underline hover:text-blue-700"
-                >
-                  立即关闭窗口
-                </button>
-              </div>
-            )}
+            <div className="mt-4 space-y-2">
+              <p className={isDark ? 'text-sm text-slate-500' : 'text-sm text-gray-400'}>
+                {countdown > 0 ? `${countdown} 秒后自动返回` : '正在返回...'}
+              </p>
+              <button
+                type="button"
+                onClick={goBack}
+                className="text-sm text-blue-600 underline hover:text-blue-700"
+              >
+                立即返回
+              </button>
+            </div>
           </>
         ) : isPending ? (
           <>
             <div className="text-6xl text-yellow-500">⏳</div>
             <h1 className="mt-4 text-xl font-bold text-yellow-600">等待支付</h1>
             <p className={isDark ? 'mt-2 text-slate-400' : 'mt-2 text-gray-500'}>订单尚未完成支付</p>
-            {isInPopup && (
-              <button
-                type="button"
-                onClick={() => window.close()}
-                className="mt-4 text-sm text-blue-600 underline hover:text-blue-700"
-              >
-                关闭窗口
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={goBack}
+              className="mt-4 text-sm text-blue-600 underline hover:text-blue-700"
+            >
+              返回
+            </button>
           </>
         ) : (
           <>
@@ -134,15 +150,13 @@ function ResultContent() {
                   ? '订单已被取消'
                   : '请联系管理员处理'}
             </p>
-            {isInPopup && (
-              <button
-                type="button"
-                onClick={() => window.close()}
-                className="mt-4 text-sm text-blue-600 underline hover:text-blue-700"
-              >
-                关闭窗口
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={goBack}
+              className="mt-4 text-sm text-blue-600 underline hover:text-blue-700"
+            >
+              返回
+            </button>
           </>
         )}
 
