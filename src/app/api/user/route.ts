@@ -46,6 +46,12 @@ export async function GET(request: NextRequest) {
           });
     const [user, methodLimits] = await Promise.all([getUser(userId), queryMethodLimits(enabledTypes)]);
 
+    // 对商户子用户，使用有效余额倍率（主站倍率 / 商户价格倍率）
+    const effectiveBalanceRatio =
+      tokenUser.reseller_price_multiplier && tokenUser.reseller_price_multiplier > 0
+        ? env.BALANCE_RATIO / tokenUser.reseller_price_multiplier
+        : env.BALANCE_RATIO;
+
     // 收集 sublabel 覆盖
     const sublabelOverrides: Record<string, string> = {};
 
@@ -93,7 +99,7 @@ export async function GET(request: NextRequest) {
             : null,
         sublabelOverrides: Object.keys(sublabelOverrides).length > 0 ? sublabelOverrides : null,
         usdExchangeRate: env.USD_EXCHANGE_RATE,
-        balanceRatio: env.BALANCE_RATIO,
+        balanceRatio: effectiveBalanceRatio,
       },
     });
   } catch (error) {

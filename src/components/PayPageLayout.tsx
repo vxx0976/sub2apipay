@@ -58,14 +58,6 @@ export default function PayPageLayout({
       >
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div
-              className={[
-                'mb-2 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium',
-                isDark ? 'bg-indigo-500/20 text-indigo-200' : 'bg-indigo-50 text-indigo-700',
-              ].join(' ')}
-            >
-              Sub2API Secure Pay
-            </div>
             <h1
               className={['text-2xl font-semibold tracking-tight', isDark ? 'text-slate-100' : 'text-slate-900'].join(
                 ' ',

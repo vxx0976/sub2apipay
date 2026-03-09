@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     try {
       const user = await getCurrentUserByToken(token);
       userId = user.id;
+      console.log('[orders] user from /auth/me:', JSON.stringify({ id: user.id, reseller_price_multiplier: user.reseller_price_multiplier }));
       if (user.reseller_price_multiplier && user.reseller_price_multiplier > 0) {
         resellerPriceMultiplier = user.reseller_price_multiplier;
       }
