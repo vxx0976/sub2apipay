@@ -46,10 +46,11 @@ export async function GET(request: NextRequest) {
           });
     const [user, methodLimits] = await Promise.all([getUser(userId), queryMethodLimits(enabledTypes)]);
 
-    // 对商户子用户，使用有效余额倍率（主站倍率 / 商户价格倍率）
+    // 对商户子用户，使用卖价直接换算：effectiveRatio = USD_EXCHANGE_RATE / selling_price
+    // 这样 creditUsd = amount * effectiveRatio / USD_EXCHANGE_RATE = amount / selling_price
     const effectiveBalanceRatio =
-      tokenUser.reseller_price_multiplier && tokenUser.reseller_price_multiplier > 0
-        ? env.BALANCE_RATIO / tokenUser.reseller_price_multiplier
+      tokenUser.reseller_selling_price && tokenUser.reseller_selling_price > 0
+        ? env.USD_EXCHANGE_RATE / tokenUser.reseller_selling_price
         : env.BALANCE_RATIO;
 
     // 收集 sublabel 覆盖

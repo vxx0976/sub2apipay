@@ -29,13 +29,12 @@ export async function POST(request: NextRequest) {
 
     // 通过 token 解析用户身份
     let userId: number;
-    let resellerPriceMultiplier: number | undefined;
+    let resellerSellingPrice: number | undefined;
     try {
       const user = await getCurrentUserByToken(token);
       userId = user.id;
-      console.log('[orders] user from /auth/me:', JSON.stringify({ id: user.id, reseller_price_multiplier: user.reseller_price_multiplier }));
-      if (user.reseller_price_multiplier && user.reseller_price_multiplier > 0) {
-        resellerPriceMultiplier = user.reseller_price_multiplier;
+      if (user.reseller_selling_price && user.reseller_selling_price > 0) {
+        resellerSellingPrice = user.reseller_selling_price;
       }
     } catch {
       return NextResponse.json({ error: '无效的 token，请重新登录', code: 'INVALID_TOKEN' }, { status: 401 });
@@ -65,7 +64,7 @@ export async function POST(request: NextRequest) {
       isMobile: is_mobile,
       srcHost: src_host,
       srcUrl: src_url,
-      resellerPriceMultiplier,
+      resellerSellingPrice,
     });
 
     // 不向客户端暴露 userName / userBalance 等隐私字段
