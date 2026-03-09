@@ -5,6 +5,7 @@ export interface Sub2ApiUser {
   status: string; // "active", "banned", etc.
   balance: number;
   notes?: string;
+  reseller_price_multiplier?: number; // Set when user belongs to a reseller with agent mode enabled
 }
 
 export interface Sub2ApiRedeemCode {

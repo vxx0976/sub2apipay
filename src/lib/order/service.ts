@@ -20,6 +20,7 @@ export interface CreateOrderInput {
   isMobile?: boolean;
   srcHost?: string;
   srcUrl?: string;
+  resellerPriceMultiplier?: number; // When set, effective balance_ratio = BALANCE_RATIO / multiplier
 }
 
 export interface CreateOrderResult {
@@ -119,6 +120,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         clientIp: input.clientIp,
         srcHost: input.srcHost || null,
         srcUrl: input.srcUrl || null,
+        priceMultiplier: input.resellerPriceMultiplier
+          ? new Prisma.Decimal(input.resellerPriceMultiplier.toFixed(4))
+          : null,
       },
     });
 
@@ -143,8 +147,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       returnUrl = env.EASY_PAY_RETURN_URL || '';
     }
 
+    const effectiveBalanceRatio = input.resellerPriceMultiplier && input.resellerPriceMultiplier > 0
+      ? env.BALANCE_RATIO / input.resellerPriceMultiplier
+      : env.BALANCE_RATIO;
     const creditUsdForSubject =
-      Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+      Math.round((input.amount * effectiveBalanceRatio / env.USD_EXCHANGE_RATE) * 100) / 100;
     const paymentResult = await provider.createPayment({
       orderId: order.id,
       amount: payAmount,
@@ -491,7 +498,11 @@ export async function executeRecharge(orderId: string): Promise<void> {
   }
 
   const env = getEnv();
-  const creditUsd = Math.round((Number(order.amount) * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+  const orderPriceMultiplier = order.priceMultiplier ? Number(order.priceMultiplier) : null;
+  const effectiveBalanceRatio = orderPriceMultiplier && orderPriceMultiplier > 0
+    ? env.BALANCE_RATIO / orderPriceMultiplier
+    : env.BALANCE_RATIO;
+  const creditUsd = Math.round((Number(order.amount) * effectiveBalanceRatio / env.USD_EXCHANGE_RATE) * 100) / 100;
 
   try {
     await createAndRedeem(

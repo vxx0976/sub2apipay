@@ -39,6 +39,7 @@ model Order {
   clientIp      String?     @map("client_ip")
   srcHost       String?     @map("src_host")
   srcUrl        String?     @map("src_url")
+  priceMultiplier Decimal?  @db.Decimal(8, 4) @map("price_multiplier")
 
   auditLogs     AuditLog[]
 
