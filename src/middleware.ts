@@ -23,7 +23,10 @@ export function middleware(request: NextRequest) {
     if (trimmed) origins.add(trimmed);
   }
 
-  if (origins.size > 0) {
+  if (origins.has('*')) {
+    // 通配符：允许任意来源嵌入，直接用 frame-ancestors *
+    response.headers.set('Content-Security-Policy', `frame-ancestors *`);
+  } else if (origins.size > 0) {
     response.headers.set('Content-Security-Policy', `frame-ancestors 'self' ${[...origins].join(' ')}`);
   }
 

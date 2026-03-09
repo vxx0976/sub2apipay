@@ -87,11 +87,26 @@ const envSchema = z.object({
     .pipe(z.number().min(0).optional()),
   PRODUCT_NAME: z.string().default('Sub2API Balance Recharge'),
 
+  // ── 换算比例 ──
+  USD_EXCHANGE_RATE: z.coerce.number().positive().default(6.9), // CNY per 1 USD
+  BALANCE_RATIO: z.coerce.number().positive().default(10), // 平台余额倍率（1 USD 实付 → BALANCE_RATIO USD 余额）
+
   ADMIN_TOKEN: z.string().min(1),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),
   PAY_HELP_IMAGE_URL: optionalTrimmedString,
   PAY_HELP_TEXT: optionalTrimmedString,
+
+  // ── 前端展示的支付方式白名单（逗号分隔：alipay, wxpay, stripe）；不设置则展示所有已注册渠道 ──
+  ENABLED_PAYMENT_TYPES: z
+    .string()
+    .default('')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    ),
 
   // ── 支付方式前端描述（sublabel）覆盖，不设置则使用默认值 ──
   PAYMENT_SUBLABEL_ALIPAY: optionalTrimmedString,

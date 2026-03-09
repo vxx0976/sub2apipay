@@ -31,7 +31,19 @@ export async function GET(request: NextRequest) {
 
     const env = getEnv();
     initPaymentProviders();
-    const enabledTypes = paymentRegistry.getSupportedTypes();
+    const allTypes = paymentRegistry.getSupportedTypes();
+
+    // 按 ENABLED_PAYMENT_TYPES 过滤：alipay → alipay/alipay_direct，wxpay → wxpay/wxpay_direct，stripe → stripe
+    const allowedCategories = env.ENABLED_PAYMENT_TYPES;
+    const enabledTypes =
+      allowedCategories.length === 0
+        ? allTypes
+        : allTypes.filter((type) => {
+            if (type === 'alipay' || type === 'alipay_direct') return allowedCategories.includes('alipay');
+            if (type === 'wxpay' || type === 'wxpay_direct') return allowedCategories.includes('wxpay');
+            if (type === 'stripe') return allowedCategories.includes('stripe');
+            return true;
+          });
     const [user, methodLimits] = await Promise.all([getUser(userId), queryMethodLimits(enabledTypes)]);
 
     // 收集 sublabel 覆盖
@@ -80,6 +92,8 @@ export async function GET(request: NextRequest) {
             ? env.STRIPE_PUBLISHABLE_KEY
             : null,
         sublabelOverrides: Object.keys(sublabelOverrides).length > 0 ? sublabelOverrides : null,
+        usdExchangeRate: env.USD_EXCHANGE_RATE,
+        balanceRatio: env.BALANCE_RATIO,
       },
     });
   } catch (error) {

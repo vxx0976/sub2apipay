@@ -25,9 +25,11 @@ interface PaymentFormProps {
   dark?: boolean;
   pendingBlocked?: boolean;
   pendingCount?: number;
+  usdExchangeRate?: number;
+  balanceRatio?: number;
 }
 
-const QUICK_AMOUNTS = [10, 20, 50, 100, 200, 500, 1000, 2000];
+const QUICK_CREDIT_AMOUNTS = [10, 50, 100, 200, 500];
 const AMOUNT_TEXT_PATTERN = /^\d*(\.\d{0,2})?$/;
 
 function hasValidCentPrecision(num: number): boolean {
@@ -47,59 +49,94 @@ export default function PaymentForm({
   dark = false,
   pendingBlocked = false,
   pendingCount = 0,
+  usdExchangeRate = 6.9,
+  balanceRatio = 10,
 }: PaymentFormProps) {
-  const [amount, setAmount] = useState<number | ''>('');
   const [paymentType, setPaymentType] = useState(enabledPaymentTypes[0] || 'alipay');
-  const [customAmount, setCustomAmount] = useState('');
+  const [creditText, setCreditText] = useState('');  // 到账余额 USD
+  const [usdText, setUsdText] = useState('');         // 实付 USD
+  const [cnyText, setCnyText] = useState('');          // 实付 CNY
 
-  // Reset paymentType when enabledPaymentTypes changes (e.g. after config loads)
   const effectivePaymentType = enabledPaymentTypes.includes(paymentType)
     ? paymentType
     : enabledPaymentTypes[0] || 'stripe';
 
-  const handleQuickAmount = (val: number) => {
-    setAmount(val);
-    setCustomAmount(String(val));
-  };
+  const cnyAmount = parseFloat(cnyText) || 0;
+  const creditUsdDisplay = parseFloat(creditText) || 0;
 
-  const handleCustomAmountChange = (val: string) => {
-    if (!AMOUNT_TEXT_PATTERN.test(val)) {
-      return;
-    }
-
-    setCustomAmount(val);
-
-    if (val === '') {
-      setAmount('');
-      return;
-    }
-
-    const num = parseFloat(val);
-    if (!isNaN(num) && num > 0 && hasValidCentPrecision(num)) {
-      setAmount(num);
-    } else {
-      setAmount('');
-    }
-  };
-
-  const selectedAmount = amount || 0;
   const isMethodAvailable = !methodLimits || methodLimits[effectivePaymentType]?.available !== false;
   const methodSingleMax = methodLimits?.[effectivePaymentType]?.singleMax;
   const effectiveMax = methodSingleMax !== undefined && methodSingleMax > 0 ? methodSingleMax : maxAmount;
-  const feeRate = methodLimits?.[effectivePaymentType]?.feeRate ?? 0;
-  const feeAmount = feeRate > 0 && selectedAmount > 0 ? Math.ceil(((selectedAmount * feeRate) / 100) * 100) / 100 : 0;
-  const payAmount =
-    feeRate > 0 && selectedAmount > 0 ? Math.round((selectedAmount + feeAmount) * 100) / 100 : selectedAmount;
+
   const isValid =
-    selectedAmount >= minAmount &&
-    selectedAmount <= effectiveMax &&
-    hasValidCentPrecision(selectedAmount) &&
+    cnyAmount >= minAmount &&
+    cnyAmount <= effectiveMax &&
+    hasValidCentPrecision(cnyAmount) &&
     isMethodAvailable;
+
+  const handleCreditChange = (val: string) => {
+    if (!AMOUNT_TEXT_PATTERN.test(val)) return;
+    setCreditText(val);
+    if (val === '' || val === '.') {
+      setUsdText('');
+      setCnyText('');
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+      const usdPay = num / balanceRatio;
+      const cnyPay = usdPay * usdExchangeRate;
+      setUsdText(usdPay.toFixed(2));
+      setCnyText(cnyPay.toFixed(2));
+    }
+  };
+
+  const handleUsdChange = (val: string) => {
+    if (!AMOUNT_TEXT_PATTERN.test(val)) return;
+    setUsdText(val);
+    if (val === '' || val === '.') {
+      setCreditText('');
+      setCnyText('');
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+      const credit = num * balanceRatio;
+      const cnyPay = num * usdExchangeRate;
+      setCreditText(credit.toFixed(2));
+      setCnyText(cnyPay.toFixed(2));
+    }
+  };
+
+  const handleCnyChange = (val: string) => {
+    if (!AMOUNT_TEXT_PATTERN.test(val)) return;
+    setCnyText(val);
+    if (val === '' || val === '.') {
+      setCreditText('');
+      setUsdText('');
+      return;
+    }
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) {
+      const usdPay = num / usdExchangeRate;
+      const credit = usdPay * balanceRatio;
+      setCreditText(credit.toFixed(2));
+      setUsdText(usdPay.toFixed(2));
+    }
+  };
+
+  const handleQuickAmount = (creditVal: number) => {
+    const usdPay = creditVal / balanceRatio;
+    const cnyPay = usdPay * usdExchangeRate;
+    setCreditText(creditVal.toFixed(2));
+    setUsdText(usdPay.toFixed(2));
+    setCnyText(cnyPay.toFixed(2));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || loading) return;
-    await onSubmit(selectedAmount, effectivePaymentType);
+    await onSubmit(cnyAmount, effectivePaymentType);
   };
 
   const renderPaymentIcon = (type: string) => {
@@ -142,8 +179,26 @@ export default function PaymentForm({
     return null;
   };
 
+  const inputClass = [
+    'w-full rounded-lg border py-3 pl-8 pr-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
+    dark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900',
+  ].join(' ');
+
+  const prefixClass = [
+    'absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium',
+    dark ? 'text-slate-400' : 'text-gray-500',
+  ].join(' ');
+
+  const labelClass = ['mb-1 block text-xs font-medium', dark ? 'text-slate-400' : 'text-slate-500'].join(' ');
+
+  // Filter quick amounts to those whose CNY is within range
+  const validQuickAmounts = QUICK_CREDIT_AMOUNTS.filter((credit) => {
+    const cny = (credit / balanceRatio) * usdExchangeRate;
+    return cny >= minAmount && cny <= effectiveMax;
+  });
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {/* User Info */}
       <div
         className={[
@@ -159,77 +214,98 @@ export default function PaymentForm({
         </div>
         {userBalance !== undefined && (
           <div className={['mt-1 text-sm', dark ? 'text-slate-400' : 'text-slate-500'].join(' ')}>
-            当前余额: <span className="font-medium text-green-600">{userBalance.toFixed(2)}</span>
+            当前余额: <span className="font-medium text-green-600">${userBalance.toFixed(2)}</span>
           </div>
         )}
       </div>
 
-      {/* Quick Amount Selection */}
+      {/* Credit USD Input */}
       <div>
         <label className={['mb-2 block text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
-          充值金额
+          到账余额（美元）
         </label>
-        <div className="grid grid-cols-3 gap-2">
-          {QUICK_AMOUNTS.filter((val) => val >= minAmount && val <= effectiveMax).map((val) => (
+        <div className="relative">
+          <span className={prefixClass}>$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={creditText}
+            onChange={(e) => handleCreditChange(e.target.value)}
+            placeholder="输入到账金额"
+            className={inputClass}
+          />
+        </div>
+      </div>
+
+      {/* Quick Amounts */}
+      {validQuickAmounts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {validQuickAmounts.map((val) => (
             <button
               key={val}
               type="button"
               onClick={() => handleQuickAmount(val)}
-              className={`rounded-lg border-2 px-4 py-3 text-center font-medium transition-colors ${
-                amount === val
+              className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
+                creditText === val.toFixed(2)
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : dark
                     ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
                     : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
               }`}
             >
-              ¥{val}
+              ${val}
             </button>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* Custom Amount */}
+      {/* Pay Amount — USD + CNY side by side */}
       <div>
-        <label className={['mb-2 block text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
-          自定义金额
-        </label>
-        <div className="relative">
-          <span
-            className={['absolute left-3 top-1/2 -translate-y-1/2', dark ? 'text-slate-500' : 'text-gray-400'].join(
-              ' ',
-            )}
-          >
-            ¥
-          </span>
-          <input
-            type="text"
-            inputMode="decimal"
-            step="0.01"
-            min={minAmount}
-            max={effectiveMax}
-            value={customAmount}
-            onChange={(e) => handleCustomAmountChange(e.target.value)}
-            placeholder={`${minAmount} - ${effectiveMax}`}
-            className={[
-              'w-full rounded-lg border py-3 pl-8 pr-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500',
-              dark ? 'border-slate-700 bg-slate-900 text-slate-100' : 'border-gray-300 bg-white text-gray-900',
-            ].join(' ')}
-          />
+        <div className={['mb-2 text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+          实付金额
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>美元</label>
+            <div className="relative">
+              <span className={prefixClass}>$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={usdText}
+                onChange={(e) => handleUsdChange(e.target.value)}
+                placeholder="0.00"
+                className={inputClass}
+              />
+            </div>
+          </div>
+          <div>
+            <label className={labelClass}>人民币（实付）</label>
+            <div className="relative">
+              <span className={prefixClass}>¥</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={cnyText}
+                onChange={(e) => handleCnyChange(e.target.value)}
+                placeholder="0.00"
+                className={inputClass}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {customAmount !== '' &&
-        !isValid &&
-        (() => {
-          const num = parseFloat(customAmount);
-          let msg = '金额需在范围内，且最多支持 2 位小数（精确到分）';
-          if (!isNaN(num)) {
-            if (num < minAmount) msg = `单笔最低充值 ¥${minAmount}`;
-            else if (num > effectiveMax) msg = `单笔最高充值 ¥${effectiveMax}`;
-          }
-          return <div className={['text-xs', dark ? 'text-amber-300' : 'text-amber-700'].join(' ')}>{msg}</div>;
-        })()}
+      {/* Validation error */}
+      {cnyText !== '' && !isValid && (() => {
+        const num = parseFloat(cnyText);
+        let msg = '金额需在范围内，且最多支持 2 位小数（精确到分）';
+        if (!isNaN(num)) {
+          if (num < minAmount) msg = `单笔最低充值 ¥${minAmount}（约 $${(minAmount * balanceRatio / usdExchangeRate).toFixed(2)} USD 到账）`;
+          else if (num > effectiveMax) msg = `单笔最高充值 ¥${effectiveMax}（约 $${(effectiveMax * balanceRatio / usdExchangeRate).toFixed(2)} USD 到账）`;
+        }
+        return <div className={['text-xs', dark ? 'text-amber-300' : 'text-amber-700'].join(' ')}>{msg}</div>;
+      })()}
 
       {/* Payment Type — only show when multiple types available */}
       {enabledPaymentTypes.length > 1 && (
@@ -284,7 +360,6 @@ export default function PaymentForm({
             })}
           </div>
 
-          {/* 当前选中渠道额度不足时的提示 */}
           {(() => {
             const limitInfo = methodLimits?.[effectivePaymentType];
             if (!limitInfo || limitInfo.available) return null;
@@ -294,34 +369,6 @@ export default function PaymentForm({
               </p>
             );
           })()}
-        </div>
-      )}
-
-      {/* Fee Detail */}
-      {feeRate > 0 && selectedAmount > 0 && (
-        <div
-          className={[
-            'rounded-xl border px-4 py-3 text-sm',
-            dark ? 'border-slate-700 bg-slate-800/60 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600',
-          ].join(' ')}
-        >
-          <div className="flex items-center justify-between">
-            <span>充值金额</span>
-            <span>¥{selectedAmount.toFixed(2)}</span>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span>手续费（{feeRate}%）</span>
-            <span>¥{feeAmount.toFixed(2)}</span>
-          </div>
-          <div
-            className={[
-              'flex items-center justify-between mt-1.5 pt-1.5 border-t font-medium',
-              dark ? 'border-slate-700 text-slate-100' : 'border-slate-200 text-slate-900',
-            ].join(' ')}
-          >
-            <span>实付金额</span>
-            <span>¥{payAmount.toFixed(2)}</span>
-          </div>
         </div>
       )}
 
@@ -355,7 +402,9 @@ export default function PaymentForm({
           ? '处理中...'
           : pendingBlocked
             ? '待支付订单过多'
-            : `立即充值 ¥${(feeRate > 0 && selectedAmount > 0 ? payAmount : selectedAmount || 0).toFixed(2)}`}
+            : isValid
+              ? `立即支付 ¥${cnyAmount.toFixed(2)} → 到账 $${creditUsdDisplay.toFixed(2)} USD`
+              : '立即支付'}
       </button>
     </form>
   );

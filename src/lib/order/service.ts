@@ -97,8 +97,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     }
   }
 
-  const feeRate = getMethodFeeRate(input.paymentType);
-  const payAmount = calculatePayAmount(input.amount, feeRate);
+  // 运营方自行承担支付网关手续费，用户始终按原始金额付款
+  const feeRate = 0;
+  const payAmount = input.amount;
 
   const expiresAt = new Date(Date.now() + env.ORDER_TIMEOUT_MINUTES * 60 * 1000);
   const order = await prisma.$transaction(async (tx) => {
@@ -142,11 +143,13 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       returnUrl = env.EASY_PAY_RETURN_URL || '';
     }
 
+    const creditUsdForSubject =
+      Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
     const paymentResult = await provider.createPayment({
       orderId: order.id,
       amount: payAmount,
       paymentType: input.paymentType,
-      subject: `${env.PRODUCT_NAME} ${payAmount.toFixed(2)} CNY`,
+      subject: `${env.PRODUCT_NAME} $${creditUsdForSubject.toFixed(2)} USD`,
       notifyUrl,
       returnUrl,
       clientIp: input.clientIp,
@@ -487,10 +490,13 @@ export async function executeRecharge(orderId: string): Promise<void> {
     return;
   }
 
+  const env = getEnv();
+  const creditUsd = Math.round((Number(order.amount) * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+
   try {
     await createAndRedeem(
       order.rechargeCode,
-      Number(order.amount),
+      creditUsd,
       order.userId,
       `sub2apipay recharge order:${orderId}`,
     );
