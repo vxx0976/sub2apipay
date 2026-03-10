@@ -180,7 +180,7 @@ export default function PaymentForm({
               type="button"
               onClick={() => setAmountText(val.toFixed(2))}
               className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
-                amountText === val.toFixed(2)
+                amount === val
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : dark
                     ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'

@@ -3,7 +3,6 @@ import { getEnv } from '@/lib/config';
 import { ORDER_STATUS } from '@/lib/constants';
 import { generateRechargeCode } from './code-gen';
 import { getMethodDailyLimit } from './limits';
-import { getMethodFeeRate, calculatePayAmount } from './fee';
 import { initPaymentProviders, paymentRegistry } from '@/lib/payment';
 import type { PaymentType, PaymentNotification } from '@/lib/payment';
 import { getUser, createAndRedeem, subtractBalance, addBalance } from '@/lib/sub2api/client';
