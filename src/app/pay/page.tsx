@@ -469,6 +469,8 @@ function PayContent() {
                   dark={isDark}
                   pendingBlocked={pendingBlocked}
                   pendingCount={pendingCount}
+                  usdExchangeRate={config.usdExchangeRate}
+                  balanceRatio={config.balanceRatio}
                   locale={locale}
                 />
               </div>
