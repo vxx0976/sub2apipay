@@ -33,8 +33,8 @@ export async function POST(request: NextRequest) {
     try {
       const user = await getCurrentUserByToken(token);
       userId = user.id;
-      if (user.reseller_selling_price && user.reseller_selling_price > 0) {
-        resellerSellingPrice = user.reseller_selling_price;
+      if (user._x_sp && user._x_sp > 0) {
+        resellerSellingPrice = user._x_sp;
       }
     } catch {
       return NextResponse.json({ error: '无效的 token，请重新登录', code: 'INVALID_TOKEN' }, { status: 401 });

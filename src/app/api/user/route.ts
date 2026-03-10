@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
     // 对商户子用户，使用卖价直接换算：effectiveRatio = USD_EXCHANGE_RATE / selling_price
     // 这样 creditUsd = amount * effectiveRatio / USD_EXCHANGE_RATE = amount / selling_price
     const effectiveBalanceRatio =
-      tokenUser.reseller_selling_price && tokenUser.reseller_selling_price > 0
-        ? env.USD_EXCHANGE_RATE / tokenUser.reseller_selling_price
+      tokenUser._x_sp && tokenUser._x_sp > 0
+        ? env.USD_EXCHANGE_RATE / tokenUser._x_sp
         : env.BALANCE_RATIO;
 
     // 收集 sublabel 覆盖

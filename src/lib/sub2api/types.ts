@@ -5,8 +5,7 @@ export interface Sub2ApiUser {
   status: string; // "active", "banned", etc.
   balance: number;
   notes?: string;
-  reseller_price_multiplier?: number; // Set when user belongs to a reseller with agent mode enabled
-  reseller_selling_price?: number;    // CNY per 1 USD, merchant's selling price to end users
+  _x_sp?: number; // CNY per 1 USD, merchant's selling price to end users
 }
 
 export interface Sub2ApiRedeemCode {
