@@ -31,7 +31,7 @@ interface PaymentFormProps {
   locale?: Locale;
 }
 
-const QUICK_AMOUNTS_CNY = [30, 50, 100, 200, 500];
+const QUICK_AMOUNTS_CNY = [10, 30, 50, 100, 200];
 const AMOUNT_TEXT_PATTERN = /^\d*(\.\d{0,2})?$/;
 
 function hasValidCentPrecision(num: number): boolean {
