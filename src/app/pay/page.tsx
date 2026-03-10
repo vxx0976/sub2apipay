@@ -32,6 +32,8 @@ interface AppConfig {
   helpImageUrl?: string | null;
   helpText?: string | null;
   stripePublishableKey?: string | null;
+  usdExchangeRate?: number;
+  balanceRatio?: number;
 }
 
 function PayContent() {
@@ -148,6 +150,8 @@ function PayContent() {
             helpImageUrl: cfgData.config.helpImageUrl ?? null,
             helpText: cfgData.config.helpText ?? null,
             stripePublishableKey: cfgData.config.stripePublishableKey ?? null,
+            usdExchangeRate: cfgData.config.usdExchangeRate,
+            balanceRatio: cfgData.config.balanceRatio,
           });
           if (cfgData.config.sublabelOverrides) {
             applySublabelOverrides(cfgData.config.sublabelOverrides);
@@ -433,6 +437,8 @@ function PayContent() {
                 dark={isDark}
                 pendingBlocked={pendingBlocked}
                 pendingCount={pendingCount}
+                usdExchangeRate={config.usdExchangeRate}
+                balanceRatio={config.balanceRatio}
                 locale={locale}
               />
             ) : (
