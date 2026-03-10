@@ -259,40 +259,21 @@ export default function PaymentForm({
         </div>
       )}
 
-      {/* Pay Amount — USD + CNY side by side */}
+      {/* Pay Amount — CNY */}
       <div>
-        <div className={['mb-2 text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
-          实付金额
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>美元</label>
-            <div className="relative">
-              <span className={prefixClass}>$</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={usdText}
-                onChange={(e) => handleUsdChange(e.target.value)}
-                placeholder="0.00"
-                className={inputClass}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>人民币（实付）</label>
-            <div className="relative">
-              <span className={prefixClass}>¥</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={cnyText}
-                onChange={(e) => handleCnyChange(e.target.value)}
-                placeholder="0.00"
-                className={inputClass}
-              />
-            </div>
-          </div>
+        <label className={['mb-2 text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+          实付金额（人民币）
+        </label>
+        <div className="relative mt-2">
+          <span className={prefixClass}>¥</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={cnyText}
+            onChange={(e) => handleCnyChange(e.target.value)}
+            placeholder="0.00"
+            className={inputClass}
+          />
         </div>
       </div>
 
