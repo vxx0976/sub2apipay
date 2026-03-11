@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
 
   const token = request.nextUrl.searchParams.get('token')?.trim();
   if (!token) {
-    return NextResponse.json({ error: locale === 'en' ? 'Missing token parameter' : '缺少 token 参数' }, { status: 401 });
+    return NextResponse.json(
+      { error: locale === 'en' ? 'Missing token parameter' : '缺少 token 参数' },
+      { status: 401 },
+    );
   }
 
   try {
@@ -28,7 +31,10 @@ export async function GET(request: NextRequest) {
     }
 
     if (tokenUser.id !== userId) {
-      return NextResponse.json({ error: locale === 'en' ? 'Forbidden to access this user' : '无权访问该用户信息' }, { status: 403 });
+      return NextResponse.json(
+        { error: locale === 'en' ? 'Forbidden to access this user' : '无权访问该用户信息' },
+        { status: 403 },
+      );
     }
 
     const env = getEnv();
@@ -96,9 +102,7 @@ export async function GET(request: NextRequest) {
         helpImageUrl: env.PAY_HELP_IMAGE_URL ?? null,
         helpText: env.PAY_HELP_TEXT ?? null,
         stripePublishableKey:
-          enabledTypes.includes('stripe') && env.STRIPE_PUBLISHABLE_KEY
-            ? env.STRIPE_PUBLISHABLE_KEY
-            : null,
+          enabledTypes.includes('stripe') && env.STRIPE_PUBLISHABLE_KEY ? env.STRIPE_PUBLISHABLE_KEY : null,
         sublabelOverrides: Object.keys(sublabelOverrides).length > 0 ? sublabelOverrides : null,
         usdExchangeRate: env.USD_EXCHANGE_RATE,
         balanceRatio: effectiveBalanceRatio,
@@ -110,6 +114,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: locale === 'en' ? 'User not found' : '用户不存在' }, { status: 404 });
     }
     console.error('Get user error:', error);
-    return NextResponse.json({ error: locale === 'en' ? 'Failed to fetch user info' : '获取用户信息失败' }, { status: 500 });
+    return NextResponse.json(
+      { error: locale === 'en' ? 'Failed to fetch user info' : '获取用户信息失败' },
+      { status: 500 },
+    );
   }
 }

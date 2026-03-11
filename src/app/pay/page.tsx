@@ -9,6 +9,7 @@ import PayPageLayout from '@/components/PayPageLayout';
 import MobileOrderList from '@/components/MobileOrderList';
 import { resolveLocale, pickLocaleText, applyLocaleToSearchParams } from '@/lib/locale';
 import { detectDeviceIsMobile, applySublabelOverrides, type UserInfo, type MyOrder } from '@/lib/pay-utils';
+import type { PublicOrderStatusSnapshot } from '@/lib/order/status';
 import type { MethodLimitInfo } from '@/components/PaymentForm';
 
 interface OrderResult {
@@ -21,6 +22,7 @@ interface OrderResult {
   qrCode?: string | null;
   clientSecret?: string | null;
   expiresAt: string;
+  statusAccessToken: string;
 }
 
 interface AppConfig {
@@ -53,7 +55,7 @@ function PayContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
-  const [finalStatus, setFinalStatus] = useState('');
+  const [finalOrderState, setFinalOrderState] = useState<PublicOrderStatusSnapshot | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [resolvedUserId, setResolvedUserId] = useState<number | null>(null);
   const [myOrders, setMyOrders] = useState<MyOrder[]>([]);
@@ -158,8 +160,7 @@ function PayContent() {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   };
 
   const loadMoreOrders = async () => {
@@ -188,16 +189,16 @@ function PayContent() {
   }, [token, locale]);
 
   useEffect(() => {
-    if (step !== 'result' || finalStatus !== 'COMPLETED') return;
+    if (step !== 'result' || finalOrderState?.status !== 'COMPLETED') return;
     loadUserAndOrders();
     const timer = setTimeout(() => {
       setStep('form');
       setOrderResult(null);
-      setFinalStatus('');
+      setFinalOrderState(null);
       setError('');
     }, 2200);
     return () => clearTimeout(timer);
-  }, [step, finalStatus]);
+  }, [step, finalOrderState]);
 
   if (!hasToken) {
     return (
@@ -205,7 +206,11 @@ function PayContent() {
         <div className="text-center text-red-500">
           <p className="text-lg font-medium">{pickLocaleText(locale, '缺少认证信息', 'Missing authentication info')}</p>
           <p className="mt-2 text-sm text-gray-500">
-            {pickLocaleText(locale, '请从 Sub2API 平台正确访问充值页面', 'Please open the recharge page from the Sub2API platform')}
+            {pickLocaleText(
+              locale,
+              '请从 Sub2API 平台正确访问充值页面',
+              'Please open the recharge page from the Sub2API platform',
+            )}
           </p>
         </div>
       </div>
@@ -218,7 +223,11 @@ function PayContent() {
         <div className="text-center text-red-500">
           <p className="text-lg font-medium">{pickLocaleText(locale, '用户不存在', 'User not found')}</p>
           <p className="mt-2 text-sm text-gray-500">
-            {pickLocaleText(locale, '请检查链接是否正确，或联系管理员', 'Please check whether the link is correct or contact the administrator')}
+            {pickLocaleText(
+              locale,
+              '请检查链接是否正确，或联系管理员',
+              'Please check whether the link is correct or contact the administrator',
+            )}
           </p>
         </div>
       </div>
@@ -274,15 +283,33 @@ function PayContent() {
 
       if (!res.ok) {
         const codeMessages: Record<string, string> = {
-          INVALID_TOKEN: pickLocaleText(locale, '认证已失效，请重新从平台进入充值页面', 'Authentication expired. Please re-enter the recharge page from the platform'),
-          USER_INACTIVE: pickLocaleText(locale, '账户已被禁用，无法充值，请联系管理员', 'This account is disabled and cannot be recharged. Please contact the administrator'),
-          TOO_MANY_PENDING: pickLocaleText(locale, '您有过多待支付订单，请先完成或取消现有订单后再试', 'You have too many pending orders. Please complete or cancel existing orders first'),
-          USER_NOT_FOUND: pickLocaleText(locale, '用户不存在，请检查链接是否正确', 'User not found. Please check whether the link is correct'),
+          INVALID_TOKEN: pickLocaleText(
+            locale,
+            '认证已失效，请重新从平台进入充值页面',
+            'Authentication expired. Please re-enter the recharge page from the platform',
+          ),
+          USER_INACTIVE: pickLocaleText(
+            locale,
+            '账户已被禁用，无法充值，请联系管理员',
+            'This account is disabled and cannot be recharged. Please contact the administrator',
+          ),
+          TOO_MANY_PENDING: pickLocaleText(
+            locale,
+            '您有过多待支付订单，请先完成或取消现有订单后再试',
+            'You have too many pending orders. Please complete or cancel existing orders first',
+          ),
+          USER_NOT_FOUND: pickLocaleText(
+            locale,
+            '用户不存在，请检查链接是否正确',
+            'User not found. Please check whether the link is correct',
+          ),
           DAILY_LIMIT_EXCEEDED: data.error,
           METHOD_DAILY_LIMIT_EXCEEDED: data.error,
           PAYMENT_GATEWAY_ERROR: data.error,
         };
-        setError(codeMessages[data.code] || data.error || pickLocaleText(locale, '创建订单失败', 'Failed to create order'));
+        setError(
+          codeMessages[data.code] || data.error || pickLocaleText(locale, '创建订单失败', 'Failed to create order'),
+        );
         return;
       }
 
@@ -296,6 +323,7 @@ function PayContent() {
         qrCode: data.qrCode,
         clientSecret: data.clientSecret,
         expiresAt: data.expiresAt,
+        statusAccessToken: data.statusAccessToken,
       });
 
       setStep('paying');
@@ -306,8 +334,8 @@ function PayContent() {
     }
   };
 
-  const handleStatusChange = (status: string) => {
-    setFinalStatus(status);
+  const handleStatusChange = (order: PublicOrderStatusSnapshot) => {
+    setFinalOrderState(order);
     setStep('result');
     if (isMobile) {
       setActiveMobileTab('orders');
@@ -317,7 +345,7 @@ function PayContent() {
   const handleBack = () => {
     setStep('form');
     setOrderResult(null);
-    setFinalStatus('');
+    setFinalOrderState(null);
     setError('');
   };
 
@@ -485,11 +513,24 @@ function PayContent() {
                     {pickLocaleText(locale, '支付说明', 'Payment Notes')}
                   </div>
                   <ul className={['mt-2 space-y-1 text-sm', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
-                    <li>{pickLocaleText(locale, '订单完成后会自动到账', 'Balance will be credited automatically after the order completes')}</li>
-                    <li>{pickLocaleText(locale, '如需历史记录请查看「我的订单」', 'Check "My Orders" for payment history')}</li>
+                    <li>
+                      {pickLocaleText(
+                        locale,
+                        '订单完成后会自动到账',
+                        'Balance will be credited automatically after the order completes',
+                      )}
+                    </li>
+                    <li>
+                      {pickLocaleText(
+                        locale,
+                        '如需历史记录请查看「我的订单」',
+                        'Check "My Orders" for payment history',
+                      )}
+                    </li>
                     {config.maxDailyAmount > 0 && (
                       <li>
-                        {pickLocaleText(locale, '每日最大充值', 'Maximum daily recharge')} ¥{config.maxDailyAmount.toFixed(2)}
+                        {pickLocaleText(locale, '每日最大充值', 'Maximum daily recharge')} ¥
+                        {config.maxDailyAmount.toFixed(2)}
                       </li>
                     )}
                   </ul>
@@ -545,6 +586,7 @@ function PayContent() {
           amount={orderResult.amount}
           payAmount={orderResult.payAmount}
           expiresAt={orderResult.expiresAt}
+          statusAccessToken={orderResult.statusAccessToken}
           onStatusChange={handleStatusChange}
           onBack={handleBack}
           dark={isDark}
@@ -554,7 +596,17 @@ function PayContent() {
         />
       )}
 
-      {step === 'result' && <OrderStatus status={finalStatus} onBack={handleBack} dark={isDark} locale={locale} />}
+      {step === 'result' && orderResult && finalOrderState && (
+        <OrderStatus
+          orderId={orderResult.orderId}
+          order={finalOrderState}
+          statusAccessToken={orderResult.statusAccessToken}
+          onStateChange={setFinalOrderState}
+          onBack={handleBack}
+          dark={isDark}
+          locale={locale}
+        />
+      )}
 
       {helpImageOpen && helpImageUrl && (
         <div
@@ -586,9 +638,7 @@ function PayPageFallback() {
 
 export default function PayPage() {
   return (
-    <Suspense
-      fallback={<PayPageFallback />}
-    >
+    <Suspense fallback={<PayPageFallback />}>
       <PayContent />
     </Suspense>
   );

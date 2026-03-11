@@ -273,7 +273,13 @@ export default function PaymentForm({
                   type="button"
                   disabled={isUnavailable}
                   onClick={() => !isUnavailable && setPaymentType(type)}
-                  title={isUnavailable ? (locale === 'en' ? 'Daily limit reached, please use another payment method' : '今日充值额度已满，请使用其他支付方式') : undefined}
+                  title={
+                    isUnavailable
+                      ? locale === 'en'
+                        ? 'Daily limit reached, please use another payment method'
+                        : '今日充值额度已满，请使用其他支付方式'
+                      : undefined
+                  }
                   className={[
                     'relative flex h-[58px] flex-col items-center justify-center rounded-lg border px-3 transition-all sm:flex-1',
                     isUnavailable
@@ -281,7 +287,7 @@ export default function PaymentForm({
                         ? 'cursor-not-allowed border-slate-700 bg-slate-800/50 opacity-50'
                         : 'cursor-not-allowed border-gray-200 bg-gray-50 opacity-50'
                       : isSelected
-                        ? `${meta?.selectedBorder || 'border-blue-500'} ${dark ? (meta?.selectedBgDark || 'bg-blue-950') : (meta?.selectedBg || 'bg-blue-50')} ${dark ? 'text-slate-100' : 'text-slate-900'} shadow-sm`
+                        ? `${meta?.selectedBorder || 'border-blue-500'} ${dark ? meta?.selectedBgDark || 'bg-blue-950' : meta?.selectedBg || 'bg-blue-50'} ${dark ? 'text-slate-100' : 'text-slate-900'} shadow-sm`
                         : dark
                           ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
                           : 'border-gray-300 bg-white text-slate-700 hover:border-gray-400',
@@ -292,7 +298,9 @@ export default function PaymentForm({
                     <span className="flex flex-col items-start leading-none">
                       <span className="text-xl font-semibold tracking-tight">{displayInfo.channel || type}</span>
                       {isUnavailable ? (
-                        <span className="text-[10px] tracking-wide text-red-400">{locale === 'en' ? 'Daily limit reached' : '今日额度已满'}</span>
+                        <span className="text-[10px] tracking-wide text-red-400">
+                          {locale === 'en' ? 'Daily limit reached' : '今日额度已满'}
+                        </span>
                       ) : displayInfo.sublabel ? (
                         <span
                           className={`text-[10px] tracking-wide ${dark ? (isSelected ? 'text-slate-300' : 'text-slate-400') : 'text-slate-600'}`}
@@ -325,9 +333,7 @@ export default function PaymentForm({
         <div
           className={[
             'rounded-lg border p-3 text-sm',
-            dark
-              ? 'border-amber-700 bg-amber-900/30 text-amber-300'
-              : 'border-amber-200 bg-amber-50 text-amber-700',
+            dark ? 'border-amber-700 bg-amber-900/30 text-amber-300' : 'border-amber-200 bg-amber-50 text-amber-700',
           ].join(' ')}
         >
           {locale === 'en'

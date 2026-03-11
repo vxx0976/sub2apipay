@@ -93,12 +93,12 @@ pnpm prisma migrate deploy
 
 项目支持四种支付服务商，通过 `PAYMENT_PROVIDERS` 环境变量启用（逗号分隔）：
 
-| 服务商 | 标识 | 说明 | 必需环境变量 |
-|--------|------|------|-------------|
-| EasyPay | `easypay` | 易支付聚合平台，代理 alipay/wxpay 渠道 | `EASY_PAY_PID`, `EASY_PAY_PKEY` |
-| 支付宝直连 | `alipay` | 直接对接支付宝开放平台 | `ALIPAY_APP_ID`, `ALIPAY_PRIVATE_KEY`, `ALIPAY_NOTIFY_URL` |
-| 微信支付直连 | `wxpay` | 直接对接微信支付 APIv3 | `WXPAY_APP_ID`, `WXPAY_MCH_ID`, `WXPAY_PRIVATE_KEY`, `WXPAY_API_V3_KEY`, `WXPAY_PUBLIC_KEY`, `WXPAY_CERT_SERIAL`, `WXPAY_NOTIFY_URL` |
-| Stripe | `stripe` | 国际支付 (信用卡等) | `STRIPE_SECRET_KEY` |
+| 服务商       | 标识      | 说明                                   | 必需环境变量                                                                                                                         |
+| ------------ | --------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| EasyPay      | `easypay` | 易支付聚合平台，代理 alipay/wxpay 渠道 | `EASY_PAY_PID`, `EASY_PAY_PKEY`                                                                                                      |
+| 支付宝直连   | `alipay`  | 直接对接支付宝开放平台                 | `ALIPAY_APP_ID`, `ALIPAY_PRIVATE_KEY`, `ALIPAY_NOTIFY_URL`                                                                           |
+| 微信支付直连 | `wxpay`   | 直接对接微信支付 APIv3                 | `WXPAY_APP_ID`, `WXPAY_MCH_ID`, `WXPAY_PRIVATE_KEY`, `WXPAY_API_V3_KEY`, `WXPAY_PUBLIC_KEY`, `WXPAY_CERT_SERIAL`, `WXPAY_NOTIFY_URL` |
+| Stripe       | `stripe`  | 国际支付 (信用卡等)                    | `STRIPE_SECRET_KEY`                                                                                                                  |
 
 `ENABLED_PAYMENT_TYPES` 控制前端展示哪些支付方式（可选值: `alipay`, `wxpay`, `stripe`），需确保对应的服务商已在 `PAYMENT_PROVIDERS` 中启用。
 

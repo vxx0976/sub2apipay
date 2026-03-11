@@ -3,12 +3,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import type { Locale } from '@/lib/locale';
-import {
-  isStripeType,
-  getPaymentMeta,
-  getPaymentIconSrc,
-  getPaymentChannelLabel,
-} from '@/lib/pay-utils';
+import type { PublicOrderStatusSnapshot } from '@/lib/order/status';
+import { isStripeType, getPaymentMeta, getPaymentIconSrc, getPaymentChannelLabel } from '@/lib/pay-utils';
+import { buildOrderStatusUrl } from '@/lib/order/status-url';
 import { TERMINAL_STATUSES } from '@/lib/constants';
 
 interface PaymentQRCodeProps {
@@ -22,12 +19,17 @@ interface PaymentQRCodeProps {
   amount: number;
   payAmount?: number;
   expiresAt: string;
-  onStatusChange: (status: string) => void;
+  statusAccessToken?: string;
+  onStatusChange: (status: PublicOrderStatusSnapshot) => void;
   onBack: () => void;
   dark?: boolean;
   isEmbedded?: boolean;
   isMobile?: boolean;
   locale?: Locale;
+}
+
+function isVisibleOrderOutcome(data: PublicOrderStatusSnapshot): boolean {
+  return data.paymentSuccess || TERMINAL_STATUSES.has(data.status);
 }
 
 export default function PaymentQRCode({
@@ -41,6 +43,7 @@ export default function PaymentQRCode({
   amount,
   payAmount: payAmountProp,
   expiresAt,
+  statusAccessToken,
   onStatusChange,
   onBack,
   dark = false,
@@ -76,23 +79,38 @@ export default function PaymentQRCode({
     scanPay: locale === 'en' ? 'Please scan with your payment app' : '请使用支付应用扫码支付',
     back: locale === 'en' ? 'Back' : '返回',
     cancelOrder: locale === 'en' ? 'Cancel Order' : '取消订单',
-    h5Hint: locale === 'en' ? 'After payment, please return to this page. The system will confirm automatically.' : '支付完成后请返回此页面，系统将自动确认',
+    h5Hint:
+      locale === 'en'
+        ? 'After payment, please return to this page. The system will confirm automatically.'
+        : '支付完成后请返回此页面，系统将自动确认',
     paid: locale === 'en' ? 'Order Paid' : '订单已支付',
     paidCancelBlocked:
-      locale === 'en' ? 'This order has already been paid and cannot be cancelled. The recharge will be credited automatically.' : '该订单已支付完成，无法取消。充值将自动到账。',
+      locale === 'en'
+        ? 'This order has already been paid and cannot be cancelled. The recharge will be credited automatically.'
+        : '该订单已支付完成，无法取消。充值将自动到账。',
     backToRecharge: locale === 'en' ? 'Back to Recharge' : '返回充值',
     credited: locale === 'en' ? 'Credited ¥' : '到账 ¥',
-    stripeLoadFailed: locale === 'en' ? 'Failed to load payment component. Please refresh and try again.' : '支付组件加载失败，请刷新页面重试',
-    initFailed: locale === 'en' ? 'Payment initialization failed. Please go back and try again.' : '支付初始化失败，请返回重试',
+    stripeLoadFailed:
+      locale === 'en'
+        ? 'Failed to load payment component. Please refresh and try again.'
+        : '支付组件加载失败，请刷新页面重试',
+    initFailed:
+      locale === 'en' ? 'Payment initialization failed. Please go back and try again.' : '支付初始化失败，请返回重试',
     loadingForm: locale === 'en' ? 'Loading payment form...' : '正在加载支付表单...',
     payFailed: locale === 'en' ? 'Payment failed. Please try again.' : '支付失败，请重试',
     successProcessing: locale === 'en' ? 'Payment successful, processing your order...' : '支付成功，正在处理订单...',
     processing: locale === 'en' ? 'Processing...' : '处理中...',
     payNow: locale === 'en' ? 'Pay' : '支付',
     popupBlocked:
-      locale === 'en' ? 'Popup was blocked by your browser. Please allow popups for this site and try again.' : '弹出窗口被浏览器拦截，请允许本站弹出窗口后重试',
+      locale === 'en'
+        ? 'Popup was blocked by your browser. Please allow popups for this site and try again.'
+        : '弹出窗口被浏览器拦截，请允许本站弹出窗口后重试',
     redirectingPrefix: locale === 'en' ? 'Redirecting to ' : '正在跳转到',
     redirectingSuffix: locale === 'en' ? '...' : '...',
+    redirectRetryHint:
+      locale === 'en'
+        ? 'If the payment app does not open automatically, go back and try again.'
+        : '如未自动拉起支付应用，请返回上一页后重新发起支付。',
     notRedirectedPrefix: locale === 'en' ? 'Not redirected? Open ' : '未跳转？点击前往',
     goPaySuffix: locale === 'en' ? '' : '',
     gotoPrefix: locale === 'en' ? 'Open ' : '前往',
@@ -109,7 +127,7 @@ export default function PaymentQRCode({
     if (isEmbedded) {
       window.open(payUrl!, '_blank');
     } else {
-      window.location.href = payUrl!;
+      window.location.replace(payUrl!);
     }
   }, [shouldAutoRedirect, redirected, payUrl, isEmbedded]);
 
@@ -223,6 +241,9 @@ export default function PaymentQRCode({
     returnUrl.search = '';
     returnUrl.searchParams.set('order_id', orderId);
     returnUrl.searchParams.set('status', 'success');
+    if (statusAccessToken) {
+      returnUrl.searchParams.set('access_token', statusAccessToken);
+    }
     if (locale === 'en') {
       returnUrl.searchParams.set('lang', 'en');
     }
@@ -254,6 +275,9 @@ export default function PaymentQRCode({
     popupUrl.searchParams.set('amount', String(amount));
     popupUrl.searchParams.set('theme', dark ? 'dark' : 'light');
     popupUrl.searchParams.set('method', stripePaymentMethod);
+    if (statusAccessToken) {
+      popupUrl.searchParams.set('access_token', statusAccessToken);
+    }
     if (locale === 'en') {
       popupUrl.searchParams.set('lang', 'en');
     }
@@ -305,16 +329,15 @@ export default function PaymentQRCode({
 
   const pollStatus = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders/${orderId}`);
+      const res = await fetch(buildOrderStatusUrl(orderId, statusAccessToken));
       if (res.ok) {
-        const data = await res.json();
-        if (TERMINAL_STATUSES.has(data.status)) {
-          onStatusChange(data.status);
+        const data = (await res.json()) as PublicOrderStatusSnapshot;
+        if (isVisibleOrderOutcome(data)) {
+          onStatusChange(data);
         }
       }
-    } catch {
-    }
-  }, [orderId, onStatusChange]);
+    } catch {}
+  }, [orderId, onStatusChange, statusAccessToken]);
 
   useEffect(() => {
     if (expired) return;
@@ -326,12 +349,12 @@ export default function PaymentQRCode({
   const handleCancel = async () => {
     if (!token) return;
     try {
-      const res = await fetch(`/api/orders/${orderId}`);
+      const res = await fetch(buildOrderStatusUrl(orderId, statusAccessToken));
       if (!res.ok) return;
-      const data = await res.json();
+      const data = (await res.json()) as PublicOrderStatusSnapshot;
 
-      if (TERMINAL_STATUSES.has(data.status)) {
-        onStatusChange(data.status);
+      if (data.paymentSuccess || TERMINAL_STATUSES.has(data.status)) {
+        onStatusChange(data);
         return;
       }
 
@@ -346,12 +369,18 @@ export default function PaymentQRCode({
           setCancelBlocked(true);
           return;
         }
-        onStatusChange('CANCELLED');
+        onStatusChange({
+          id: orderId,
+          status: 'CANCELLED',
+          expiresAt,
+          paymentSuccess: false,
+          rechargeSuccess: false,
+          rechargeStatus: 'closed',
+        });
       } else {
         await pollStatus();
       }
-    } catch {
-    }
+    } catch {}
   };
 
   const meta = getPaymentMeta(paymentType || 'alipay');
@@ -390,7 +419,9 @@ export default function PaymentQRCode({
             {amount.toFixed(2)}
           </div>
         )}
-        <div className={`mt-1 text-sm ${expired ? 'text-red-500' : !expired && timeLeftSeconds <= 60 ? 'text-red-500 animate-pulse' : dark ? 'text-slate-400' : 'text-gray-500'}`}>
+        <div
+          className={`mt-1 text-sm ${expired ? 'text-red-500' : !expired && timeLeftSeconds <= 60 ? 'text-red-500 animate-pulse' : dark ? 'text-slate-400' : 'text-gray-500'}`}
+        >
           {expired ? t.expired : `${t.remaining}: ${timeLeft}`}
         </div>
       </div>
@@ -406,9 +437,7 @@ export default function PaymentQRCode({
                     dark ? 'border-slate-700' : 'border-gray-300',
                   ].join(' ')}
                 >
-                  <p className={['text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>
-                    {t.initFailed}
-                  </p>
+                  <p className={['text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>{t.initFailed}</p>
                 </div>
               ) : !stripeLoaded ? (
                 <div className="flex items-center justify-center py-8">
@@ -418,10 +447,14 @@ export default function PaymentQRCode({
                   </span>
                 </div>
               ) : stripeError && !stripeLib ? (
-                <div className={[
-                  'rounded-lg border p-3 text-sm',
-                  dark ? 'border-red-700 bg-red-900/30 text-red-400' : 'border-red-200 bg-red-50 text-red-600',
-                ].join(' ')}>{stripeError}</div>
+                <div
+                  className={[
+                    'rounded-lg border p-3 text-sm',
+                    dark ? 'border-red-700 bg-red-900/30 text-red-400' : 'border-red-200 bg-red-50 text-red-600',
+                  ].join(' ')}
+                >
+                  {stripeError}
+                </div>
               ) : (
                 <>
                   <div
@@ -450,9 +483,7 @@ export default function PaymentQRCode({
                       onClick={handleStripeSubmit}
                       className={[
                         'w-full rounded-lg py-3 font-medium text-white shadow-md transition-colors',
-                        stripeSubmitting
-                          ? 'cursor-not-allowed bg-gray-400'
-                          : meta.buttonClass,
+                        stripeSubmitting ? 'cursor-not-allowed bg-gray-400' : meta.buttonClass,
                       ].join(' ')}
                     >
                       {stripeSubmitting ? (
@@ -483,7 +514,10 @@ export default function PaymentQRCode({
           ) : shouldAutoRedirect ? (
             <>
               <div className="flex items-center justify-center py-6">
-                <div className={`h-8 w-8 animate-spin rounded-full border-2 border-t-transparent`} style={{ borderColor: meta.color, borderTopColor: 'transparent' }} />
+                <div
+                  className={`h-8 w-8 animate-spin rounded-full border-2 border-t-transparent`}
+                  style={{ borderColor: meta.color, borderTopColor: 'transparent' }}
+                />
                 <span className={['ml-3 text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>
                   {`${t.redirectingPrefix}${channelLabel}${t.redirectingSuffix}`}
                 </span>
@@ -495,11 +529,11 @@ export default function PaymentQRCode({
                 className={`flex w-full items-center justify-center gap-2 rounded-lg py-3 font-medium text-white shadow-md ${meta.buttonClass}`}
               >
                 {iconSrc && <img src={iconSrc} alt={channelLabel} className="h-5 w-5 brightness-0 invert" />}
-                {redirected ? `${t.notRedirectedPrefix}${channelLabel}` : `${t.gotoPrefix}${channelLabel}${t.gotoSuffix}`}
+                {redirected
+                  ? `${t.notRedirectedPrefix}${channelLabel}`
+                  : `${t.gotoPrefix}${channelLabel}${t.gotoSuffix}`}
               </a>
-              <p className={['text-center text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>
-                {t.h5Hint}
-              </p>
+              <p className={['text-center text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>{t.h5Hint}</p>
             </>
           ) : (
             <>
@@ -562,9 +596,7 @@ export default function PaymentQRCode({
             onClick={handleCancel}
             className={[
               'flex-1 rounded-lg border py-2 text-sm',
-              dark
-                ? 'border-red-700 text-red-400 hover:bg-red-900/30'
-                : 'border-red-300 text-red-600 hover:bg-red-50',
+              dark ? 'border-red-700 text-red-400 hover:bg-red-900/30' : 'border-red-300 text-red-600 hover:bg-red-50',
             ].join(' ')}
           >
             {t.cancelOrder}
