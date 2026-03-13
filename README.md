@@ -308,6 +308,7 @@ Sub2API **v0.1.88** 及以上版本会自动拼接以下参数，无需手动添
 | `user_id` | Sub2API 用户 ID                                  |
 | `token`   | 用户登录 Token（有 token 才能查看订单历史）      |
 | `theme`   | `light`（默认）或 `dark`                         |
+| `lang`    | 界面语言，`zh`（默认）或 `en`                    |
 | `ui_mode` | `standalone`（默认）或 `embedded`（iframe 嵌入） |
 
 ---

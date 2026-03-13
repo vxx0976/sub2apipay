@@ -134,7 +134,7 @@ export default function MobileOrderList({
                   {locale === 'en' ? 'Loading...' : '加载中...'}
                 </span>
               ) : (
-                <span className={['text-xs', isDark ? 'text-slate-600' : 'text-slate-300'].join(' ')}>
+                <span className={['text-xs', isDark ? 'text-slate-400' : 'text-slate-400'].join(' ')}>
                   {locale === 'en' ? 'Scroll up to load more' : '上滑加载更多'}
                 </span>
               )}
@@ -142,7 +142,7 @@ export default function MobileOrderList({
           )}
 
           {!hasMore && orders.length > 0 && (
-            <div className={['py-2 text-center text-xs', isDark ? 'text-slate-600' : 'text-slate-400'].join(' ')}>
+            <div className={['py-2 text-center text-xs', isDark ? 'text-slate-400' : 'text-slate-400'].join(' ')}>
               {locale === 'en' ? 'All orders loaded' : '已显示全部订单'}
             </div>
           )}

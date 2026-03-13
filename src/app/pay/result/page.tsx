@@ -54,12 +54,12 @@ function closeCurrentWindow() {
   }, 250);
 }
 
-function getStatusConfig(order: PublicOrderStatusSnapshot | null, locale: Locale, hasAccessToken: boolean) {
+function getStatusConfig(order: PublicOrderStatusSnapshot | null, locale: Locale, hasAccessToken: boolean, isDark = false) {
   if (!order) {
     return locale === 'en'
       ? {
           label: 'Payment Error',
-          color: 'text-red-600',
+          color: isDark ? 'text-red-400' : 'text-red-600',
           icon: '✗',
           message: hasAccessToken
             ? 'Unable to load the order status. Please try again later.'
@@ -67,7 +67,7 @@ function getStatusConfig(order: PublicOrderStatusSnapshot | null, locale: Locale
         }
       : {
           label: '支付异常',
-          color: 'text-red-600',
+          color: isDark ? 'text-red-400' : 'text-red-600',
           icon: '✗',
           message: hasAccessToken ? '未查询到订单状态，请稍后重试。' : '订单访问凭证缺失，请返回原充值页查看订单结果。',
         };
@@ -77,11 +77,11 @@ function getStatusConfig(order: PublicOrderStatusSnapshot | null, locale: Locale
     return locale === 'en'
       ? {
           label: 'Recharge Successful',
-          color: 'text-green-600',
+          color: isDark ? 'text-green-400' : 'text-green-600',
           icon: '✓',
           message: 'Your balance has been credited successfully.',
         }
-      : { label: '充值成功', color: 'text-green-600', icon: '✓', message: '余额已成功到账！' };
+      : { label: '充值成功', color: isDark ? 'text-green-400' : 'text-green-600', icon: '✓', message: '余额已成功到账！' };
   }
 
   if (order.paymentSuccess) {
@@ -89,25 +89,25 @@ function getStatusConfig(order: PublicOrderStatusSnapshot | null, locale: Locale
       return locale === 'en'
         ? {
             label: 'Top-up Processing',
-            color: 'text-blue-600',
+            color: isDark ? 'text-blue-400' : 'text-blue-600',
             icon: '⟳',
             message: 'Payment succeeded, and the balance top-up is being processed.',
           }
-        : { label: '充值处理中', color: 'text-blue-600', icon: '⟳', message: '支付成功，余额正在充值中...' };
+        : { label: '充值处理中', color: isDark ? 'text-blue-400' : 'text-blue-600', icon: '⟳', message: '支付成功，余额正在充值中...' };
     }
 
     if (order.rechargeStatus === 'failed') {
       return locale === 'en'
         ? {
             label: 'Payment Successful',
-            color: 'text-amber-600',
+            color: isDark ? 'text-amber-400' : 'text-amber-600',
             icon: '!',
             message:
               'Payment succeeded, but the balance top-up has not completed yet. Please check again later or contact the administrator.',
           }
         : {
             label: '支付成功',
-            color: 'text-amber-600',
+            color: isDark ? 'text-amber-400' : 'text-amber-600',
             icon: '!',
             message: '支付成功，但余额充值暂未完成，请稍后查看订单结果或联系管理员。',
           };
@@ -116,30 +116,30 @@ function getStatusConfig(order: PublicOrderStatusSnapshot | null, locale: Locale
 
   if (order.status === 'PENDING') {
     return locale === 'en'
-      ? { label: 'Awaiting Payment', color: 'text-yellow-600', icon: '⏳', message: 'The order has not been paid yet.' }
-      : { label: '等待支付', color: 'text-yellow-600', icon: '⏳', message: '订单尚未完成支付。' };
+      ? { label: 'Awaiting Payment', color: isDark ? 'text-yellow-400' : 'text-yellow-600', icon: '⏳', message: 'The order has not been paid yet.' }
+      : { label: '等待支付', color: isDark ? 'text-yellow-400' : 'text-yellow-600', icon: '⏳', message: '订单尚未完成支付。' };
   }
 
   if (order.status === 'EXPIRED') {
     return locale === 'en'
       ? {
           label: 'Order Expired',
-          color: 'text-gray-500',
+          color: isDark ? 'text-slate-400' : 'text-gray-500',
           icon: '⏰',
           message: 'This order has expired. Please create a new order.',
         }
-      : { label: '订单已超时', color: 'text-gray-500', icon: '⏰', message: '订单已超时，请重新充值。' };
+      : { label: '订单已超时', color: isDark ? 'text-slate-400' : 'text-gray-500', icon: '⏰', message: '订单已超时，请重新充值。' };
   }
 
   if (order.status === 'CANCELLED') {
     return locale === 'en'
-      ? { label: 'Order Cancelled', color: 'text-gray-500', icon: '✗', message: 'This order has been cancelled.' }
-      : { label: '订单已取消', color: 'text-gray-500', icon: '✗', message: '订单已被取消。' };
+      ? { label: 'Order Cancelled', color: isDark ? 'text-slate-400' : 'text-gray-500', icon: '✗', message: 'This order has been cancelled.' }
+      : { label: '订单已取消', color: isDark ? 'text-slate-400' : 'text-gray-500', icon: '✗', message: '订单已被取消。' };
   }
 
   return locale === 'en'
-    ? { label: 'Payment Error', color: 'text-red-600', icon: '✗', message: 'Please contact the administrator.' }
-    : { label: '支付异常', color: 'text-red-600', icon: '✗', message: '请联系管理员处理。' };
+    ? { label: 'Payment Error', color: isDark ? 'text-red-400' : 'text-red-600', icon: '✗', message: 'Please contact the administrator.' }
+    : { label: '支付异常', color: isDark ? 'text-red-400' : 'text-red-600', icon: '✗', message: '请联系管理员处理。' };
 }
 
 function ResultContent() {
@@ -233,7 +233,7 @@ function ResultContent() {
     );
   }
 
-  const display = getStatusConfig(orderState, locale, Boolean(accessToken));
+  const display = getStatusConfig(orderState, locale, Boolean(accessToken), isDark);
 
   return (
     <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
@@ -254,14 +254,14 @@ function ResultContent() {
               <button
                 type="button"
                 onClick={closeCurrentWindow}
-                className="text-sm text-blue-600 underline hover:text-blue-700"
+                className={`text-sm underline ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
               >
                 {text.closeNow}
               </button>
             </div>
           )
         ) : (
-          <button type="button" onClick={goBack} className="mt-4 text-sm text-blue-600 underline hover:text-blue-700">
+          <button type="button" onClick={goBack} className={`mt-4 text-sm underline ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}>
             {text.back}
           </button>
         )}
@@ -277,10 +277,11 @@ function ResultContent() {
 function ResultPageFallback() {
   const searchParams = useSearchParams();
   const locale = resolveLocale(searchParams.get('lang'));
+  const isDark = searchParams.get('theme') === 'dark';
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <div className="text-gray-500">{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
+    <div className={`flex min-h-screen items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={isDark ? 'text-slate-400' : 'text-gray-500'}>{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
     </div>
   );
 }

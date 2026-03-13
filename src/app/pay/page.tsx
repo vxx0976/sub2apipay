@@ -110,7 +110,7 @@ function PayContent() {
           {pickLocaleText(locale, '帮助', 'Support')}
         </div>
         {helpImageUrl && (
-          <img src={helpImageUrl} alt="help" onClick={() => setHelpImageOpen(true)} className="mt-3 max-h-40 w-full cursor-zoom-in rounded-lg object-contain bg-white/70 p-2" />
+          <img src={helpImageUrl} alt="help" onClick={() => setHelpImageOpen(true)} className={`mt-3 max-h-40 w-full cursor-zoom-in rounded-lg object-contain p-2 ${isDark ? 'bg-slate-700/50' : 'bg-white/70'}`} />
         )}
         {helpText && (
           <div className={['mt-3 space-y-1 text-sm leading-6', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
@@ -301,7 +301,7 @@ function PayContent() {
       <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
         <div className="text-center text-red-500">
           <p className="text-lg font-medium">{pickLocaleText(locale, '缺少认证信息', 'Missing authentication info')}</p>
-          <p className="mt-2 text-sm text-gray-500">
+          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
             {pickLocaleText(locale, '请从 Sub2API 平台正确访问充值页面', 'Please open the recharge page from the Sub2API platform')}
           </p>
         </div>
@@ -314,7 +314,7 @@ function PayContent() {
       <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
         <div className="text-center text-red-500">
           <p className="text-lg font-medium">{pickLocaleText(locale, '用户不存在', 'User not found')}</p>
-          <p className="mt-2 text-sm text-gray-500">
+          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>
             {pickLocaleText(locale, '请检查链接是否正确，或联系管理员', 'Please check whether the link is correct or contact the administrator')}
           </p>
         </div>
@@ -852,7 +852,7 @@ function PayContent() {
                           {pickLocaleText(locale, '帮助', 'Support')}
                         </div>
                         {helpImageUrl && (
-                          <img src={helpImageUrl} alt="help" onClick={() => setHelpImageOpen(true)} className="mt-3 max-h-40 w-full cursor-zoom-in rounded-lg object-contain bg-white/70 p-2" />
+                          <img src={helpImageUrl} alt="help" onClick={() => setHelpImageOpen(true)} className={`mt-3 max-h-40 w-full cursor-zoom-in rounded-lg object-contain p-2 ${isDark ? 'bg-slate-700/50' : 'bg-white/70'}`} />
                         )}
                         {helpText && (
                           <div className={['mt-3 space-y-1 text-sm leading-6', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
@@ -935,9 +935,10 @@ function PayContent() {
 function PayPageFallback() {
   const searchParams = useSearchParams();
   const locale = resolveLocale(searchParams.get('lang'));
+  const isDark = searchParams.get('theme') === 'dark';
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-gray-500">{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
+    <div className={`flex min-h-screen items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={isDark ? 'text-slate-400' : 'text-gray-500'}>{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
     </div>
   );
 }

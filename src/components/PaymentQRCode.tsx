@@ -391,14 +391,17 @@ export default function PaymentQRCode({
   if (cancelBlocked) {
     return (
       <div className="flex flex-col items-center space-y-4 py-8">
-        <div className="text-6xl text-green-600">{'✓'}</div>
-        <h2 className="text-xl font-bold text-green-600">{t.paid}</h2>
+        <div className={dark ? 'text-6xl text-green-400' : 'text-6xl text-green-600'}>{'✓'}</div>
+        <h2 className={['text-xl font-bold', dark ? 'text-green-400' : 'text-green-600'].join(' ')}>{t.paid}</h2>
         <p className={['text-center text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>
           {t.paidCancelBlocked}
         </p>
         <button
           onClick={onBack}
-          className="mt-4 w-full rounded-lg bg-blue-600 py-3 font-medium text-white hover:bg-blue-700"
+          className={[
+            'mt-4 w-full rounded-lg py-3 font-medium text-white',
+            dark ? 'bg-blue-600/90 hover:bg-blue-600' : 'bg-blue-600 hover:bg-blue-700',
+          ].join(' ')}
         >
           {t.backToRecharge}
         </button>
@@ -409,7 +412,7 @@ export default function PaymentQRCode({
   return (
     <div className="flex flex-col items-center space-y-4">
       <div className="text-center">
-        <div className="text-4xl font-bold text-blue-600">
+        <div className={['text-4xl font-bold', dark ? 'text-blue-400' : 'text-blue-600'].join(' ')}>
           {'¥'}
           {displayAmount.toFixed(2)}
         </div>
@@ -465,13 +468,16 @@ export default function PaymentQRCode({
                     ].join(' ')}
                   />
                   {stripeError && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                    <div className={[
+                      'rounded-lg border p-3 text-sm',
+                      dark ? 'border-red-700/50 bg-red-900/30 text-red-400' : 'border-red-200 bg-red-50 text-red-600',
+                    ].join(' ')}>
                       {stripeError}
                     </div>
                   )}
                   {stripeSuccess ? (
                     <div className="text-center">
-                      <div className="text-4xl text-green-600">{'✓'}</div>
+                      <div className={dark ? 'text-4xl text-green-400' : 'text-4xl text-green-600'}>{'✓'}</div>
                       <p className={['mt-2 text-sm', dark ? 'text-slate-400' : 'text-gray-500'].join(' ')}>
                         {t.successProcessing}
                       </p>

@@ -195,7 +195,7 @@ function StripePopupContent() {
           className={`w-full max-w-md space-y-4 rounded-2xl border p-6 ${isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'} shadow-lg`}
         >
           <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600">
+            <div className={`text-3xl font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
               {'¥'}
               {amount.toFixed(2)}
             </div>
@@ -213,7 +213,7 @@ function StripePopupContent() {
               <button
                 type="button"
                 onClick={() => window.close()}
-                className="w-full text-sm text-blue-600 underline hover:text-blue-700"
+                className={`w-full text-sm underline ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
               >
                 {text.closeWindow}
               </button>
@@ -235,7 +235,7 @@ function StripePopupContent() {
         className={`w-full max-w-md space-y-4 rounded-2xl border p-6 ${isDark ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'} shadow-lg`}
       >
         <div className="text-center">
-          <div className="text-3xl font-bold text-blue-600">
+          <div className={`text-3xl font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
             {'¥'}
             {amount.toFixed(2)}
           </div>
@@ -251,12 +251,12 @@ function StripePopupContent() {
           </div>
         ) : stripeSuccess ? (
           <div className="py-6 text-center">
-            <div className="text-5xl text-green-600">{'✓'}</div>
+            <div className={`text-5xl ${isDark ? 'text-green-400' : 'text-green-600'}`}>{'✓'}</div>
             <p className={`mt-3 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{text.successClosing}</p>
             <button
               type="button"
               onClick={() => window.close()}
-              className="mt-4 text-sm text-blue-600 underline hover:text-blue-700"
+              className={`mt-4 text-sm underline ${isDark ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
             >
               {text.closeWindowManually}
             </button>
@@ -280,7 +280,9 @@ function StripePopupContent() {
               onClick={handleSubmit}
               className={[
                 'w-full rounded-lg py-3 font-medium text-white shadow-md transition-colors',
-                stripeSubmitting ? 'bg-gray-400 cursor-not-allowed' : getPaymentMeta('stripe').buttonClass,
+                stripeSubmitting
+                  ? isDark ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-gray-400 cursor-not-allowed'
+                  : getPaymentMeta('stripe').buttonClass,
               ].join(' ')}
             >
               {stripeSubmitting ? (
@@ -302,10 +304,11 @@ function StripePopupContent() {
 function StripePopupFallback() {
   const searchParams = useSearchParams();
   const locale = resolveLocale(searchParams.get('lang'));
+  const isDark = searchParams.get('theme') === 'dark';
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-gray-500">{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
+    <div className={`flex min-h-screen items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={isDark ? 'text-slate-400' : 'text-gray-500'}>{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
     </div>
   );
 }

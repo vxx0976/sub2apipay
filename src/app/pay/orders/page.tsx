@@ -177,7 +177,7 @@ function OrdersContent() {
       <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
         <div className="text-center text-red-500">
           <p className="text-lg font-medium">{text.missingAuth}</p>
-          <p className="mt-2 text-sm text-gray-500">{text.visitOrders}</p>
+          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{text.visitOrders}</p>
         </div>
       </div>
     );
@@ -238,10 +238,11 @@ function OrdersContent() {
 function OrdersPageFallback() {
   const searchParams = useSearchParams();
   const locale = resolveLocale(searchParams.get('lang'));
+  const isDark = searchParams.get('theme') === 'dark';
 
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-gray-500">{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
+    <div className={`flex min-h-screen items-center justify-center ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
+      <div className={isDark ? 'text-slate-400' : 'text-gray-500'}>{pickLocaleText(locale, '加载中...', 'Loading...')}</div>
     </div>
   );
 }

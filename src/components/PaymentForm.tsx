@@ -195,7 +195,9 @@ export default function PaymentForm({
                   onClick={() => handleQuickAmount(val)}
                   className={`rounded-lg border-2 px-4 py-3 text-center font-medium transition-colors ${
                     amount === val
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      ? dark
+                        ? 'border-blue-500 bg-blue-900/40 text-blue-300'
+                        : 'border-blue-500 bg-blue-50 text-blue-700'
                       : dark
                         ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
@@ -373,12 +375,12 @@ export default function PaymentForm({
       <button
         type="submit"
         disabled={!isValid || loading || pendingBlocked}
-        className={`w-full rounded-lg py-3 text-center font-medium text-white transition-colors ${
+        className={`w-full rounded-lg py-3 text-center font-medium transition-colors ${
           isValid && !loading && !pendingBlocked
-            ? getPaymentMeta(effectivePaymentType).buttonClass
+            ? `text-white ${getPaymentMeta(effectivePaymentType).buttonClass}`
             : dark
-              ? 'cursor-not-allowed bg-slate-700 text-slate-300'
-              : 'cursor-not-allowed bg-gray-300'
+              ? 'cursor-not-allowed bg-slate-700 text-slate-400'
+              : 'cursor-not-allowed bg-gray-300 text-gray-500'
         }`}
       >
         {loading
