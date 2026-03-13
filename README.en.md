@@ -2,7 +2,7 @@
 
 **Language**: [中文](./README.md) | English (current)
 
-Sub2ApiPay is a self-hosted recharge payment gateway built for the [Sub2API](https://sub2api.com) platform. It supports Alipay, WeChat Pay (via EasyPay aggregator), and Stripe. Once a payment is confirmed, the system automatically calls the Sub2API management API to credit the user's balance — no manual intervention required.
+Sub2ApiPay is a self-hosted payment gateway built for the [Sub2API](https://sub2api.com) platform. It supports four payment channels — **EasyPay** (aggregated Alipay/WeChat Pay), **Alipay** (official), **WeChat Pay** (official), and **Stripe** — with both pay-as-you-go balance top-up and subscription plans. Once a payment is confirmed, the system automatically calls the Sub2API management API to credit the user's balance or activate the subscription — no manual intervention required.
 
 ---
 
@@ -16,19 +16,22 @@ Sub2ApiPay is a self-hosted recharge payment gateway built for the [Sub2API](htt
 - [Sub2API Integration](#sub2api-integration)
 - [Admin Panel](#admin-panel)
 - [Payment Flow](#payment-flow)
+- [API Endpoints](#api-endpoints)
 - [Development](#development)
 
 ---
 
 ## Features
 
-- **Multiple Payment Methods** — Alipay, WeChat Pay (EasyPay), Stripe credit card
+- **Four Payment Channels** — EasyPay aggregation, Alipay (official), WeChat Pay (official), Stripe
+- **Dual Billing Modes** — Pay-as-you-go balance top-up + subscription plans
 - **Auto Balance Credit** — Automatically calls Sub2API after payment verification, fully hands-free
 - **Full Order Lifecycle** — Auto-expiry, user cancellation, admin cancellation, refunds
-- **Limit Controls** — Configurable per-transaction cap and daily cumulative cap per user
-- **Security** — Token auth, MD5/Webhook signature verification, timing-safe comparison, full audit log
-- **Responsive UI** — PC + mobile adaptive layout, dark mode support, iframe embed support
-- **Admin Panel** — Order list (pagination/filtering), order details, retry recharge, refunds
+- **Limit Controls** — Per-transaction cap, daily per-user cap, daily per-channel global cap
+- **Security** — Token auth, RSA2/MD5/Webhook signature verification, timing-safe comparison, full audit log
+- **Responsive UI** — PC + mobile adaptive layout, dark/light theme, iframe embed support
+- **Bilingual** — Automatic Chinese/English interface adaptation
+- **Admin Panel** — Dashboard, order management (pagination/filtering/retry/refund), channel & subscription management
 
 ---
 
@@ -99,22 +102,16 @@ See [`.env.example`](./.env.example) for the full template.
 **Step 1**: Declare which payment providers to load via `PAYMENT_PROVIDERS` (comma-separated):
 
 ```env
-# EasyPay only
+# Available: easypay, alipay, wxpay, stripe
+# Example: EasyPay only
 PAYMENT_PROVIDERS=easypay
-# Stripe only
-PAYMENT_PROVIDERS=stripe
-# Both
-PAYMENT_PROVIDERS=easypay,stripe
+# Example: Alipay + WeChat Pay + Stripe (official channels)
+PAYMENT_PROVIDERS=alipay,wxpay,stripe
 ```
 
-**Step 2**: Control which channels are shown to users via `ENABLED_PAYMENT_TYPES`:
+> **Alipay / WeChat Pay (official)** and **EasyPay** can coexist. Official channels connect directly to Alipay/WeChat Pay APIs with funds going straight to your merchant account and lower fees; EasyPay uses a third-party aggregation platform with a lower barrier to entry. When using EasyPay, choose providers where funds are routed through official Alipay/WeChat Pay channels rather than third-party collection.
 
-```env
-# EasyPay supports: alipay, wxpay  |  Stripe supports: stripe
-ENABLED_PAYMENT_TYPES=alipay,wxpay
-```
-
-#### EasyPay (Alipay / WeChat Pay)
+#### EasyPay (Alipay / WeChat Pay Aggregation)
 
 Any payment provider compatible with the **EasyPay protocol** can be used, such as [ZPay](https://z-pay.cn/?uid=23808) (`https://z-pay.cn/?uid=23808`) (this link contains the author's referral code — feel free to remove it). ZPay supports **individual users** (no business license required) with a daily transaction limit of ¥10,000; users with a business license have no transaction limits.
 
@@ -127,7 +124,7 @@ Any payment provider compatible with the **EasyPay protocol** can be used, such 
 
 > **Disclaimer**: Please evaluate the security, reliability, and compliance of any third-party payment provider on your own. This project does not endorse or guarantee any specific provider.
 >
-> **⚠️ Security Warning**: When using third-party aggregated payment services, always choose providers where **funds are routed through official Alipay/WeChat Pay channels rather than third-party collection**, to avoid the risk of fund misappropriation.
+> **⚠️ Security Warning**: When using third-party platforms, always choose providers where **funds are routed through official Alipay/WeChat Pay channels rather than third-party collection**, to avoid the risk of fund misappropriation.
 
 | Variable              | Description                                                      |
 | --------------------- | ---------------------------------------------------------------- |
@@ -138,6 +135,33 @@ Any payment provider compatible with the **EasyPay protocol** can be used, such 
 | `EASY_PAY_RETURN_URL` | Redirect URL after payment: `${NEXT_PUBLIC_APP_URL}/pay/result`  |
 | `EASY_PAY_CID_ALIPAY` | Alipay channel ID (optional)                                     |
 | `EASY_PAY_CID_WXPAY`  | WeChat Pay channel ID (optional)                                 |
+
+#### Alipay (Official)
+
+Direct integration with the Alipay Open Platform. Supports PC page payment (`alipay.trade.page.pay`) and mobile web payment (`alipay.trade.wap.pay`), automatically switching based on device type.
+
+| Variable             | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `ALIPAY_APP_ID`      | Alipay application AppID                       |
+| `ALIPAY_PRIVATE_KEY` | Application private key (content or file path) |
+| `ALIPAY_PUBLIC_KEY`  | Alipay public key (content or file path)       |
+| `ALIPAY_NOTIFY_URL`  | Async callback URL                             |
+| `ALIPAY_RETURN_URL`  | Sync redirect URL (optional)                   |
+
+#### WeChat Pay (Official)
+
+Direct integration with WeChat Pay APIv3. Supports Native QR code payment and H5 payment, with mobile devices preferring H5 and auto-fallback to QR code.
+
+| Variable              | Description                                     |
+| --------------------- | ----------------------------------------------- |
+| `WXPAY_APP_ID`        | WeChat Pay AppID                                |
+| `WXPAY_MCH_ID`        | Merchant ID                                     |
+| `WXPAY_PRIVATE_KEY`   | Merchant API private key (content or file path) |
+| `WXPAY_CERT_SERIAL`   | Merchant certificate serial number              |
+| `WXPAY_API_V3_KEY`    | APIv3 key                                       |
+| `WXPAY_PUBLIC_KEY`    | WeChat Pay public key (content or file path)    |
+| `WXPAY_PUBLIC_KEY_ID` | WeChat Pay public key ID                        |
+| `WXPAY_NOTIFY_URL`    | Async callback URL                              |
 
 #### Stripe
 
@@ -152,13 +176,17 @@ Any payment provider compatible with the **EasyPay protocol** can be used, such 
 
 ### Business Rules
 
-| Variable                    | Description                                     | Default                    |
-| --------------------------- | ----------------------------------------------- | -------------------------- |
-| `MIN_RECHARGE_AMOUNT`       | Minimum amount per transaction (CNY)            | `1`                        |
-| `MAX_RECHARGE_AMOUNT`       | Maximum amount per transaction (CNY)            | `1000`                     |
-| `MAX_DAILY_RECHARGE_AMOUNT` | Daily cumulative max per user (`0` = unlimited) | `10000`                    |
-| `ORDER_TIMEOUT_MINUTES`     | Order expiry in minutes                         | `5`                        |
-| `PRODUCT_NAME`              | Product name shown on payment page              | `Sub2API Balance Recharge` |
+| Variable                         | Description                                       | Default                    |
+| -------------------------------- | ------------------------------------------------- | -------------------------- |
+| `MIN_RECHARGE_AMOUNT`            | Minimum amount per transaction (CNY)              | `1`                        |
+| `MAX_RECHARGE_AMOUNT`            | Maximum amount per transaction (CNY)              | `1000`                     |
+| `MAX_DAILY_RECHARGE_AMOUNT`      | Daily cumulative max per user (`0` = unlimited)   | `10000`                    |
+| `MAX_DAILY_AMOUNT_ALIPAY`        | EasyPay Alipay channel daily global limit (opt.)  | Provider default           |
+| `MAX_DAILY_AMOUNT_ALIPAY_DIRECT` | Alipay official channel daily global limit (opt.) | Provider default           |
+| `MAX_DAILY_AMOUNT_WXPAY`         | WeChat Pay channel daily global limit (opt.)      | Provider default           |
+| `MAX_DAILY_AMOUNT_STRIPE`        | Stripe channel daily global limit (opt.)          | Provider default           |
+| `ORDER_TIMEOUT_MINUTES`          | Order expiry in minutes                           | `5`                        |
+| `PRODUCT_NAME`                   | Product name shown on payment page                | `Sub2API Balance Recharge` |
 
 ### UI Customization (Optional)
 
@@ -267,13 +295,16 @@ docker compose exec app npx prisma migrate deploy
 
 ## Sub2API Integration
 
-The following page URLs can be configured in the Sub2API admin panel:
+Assuming this service is deployed at `https://pay.example.com`.
 
-| Page             | URL                                  | Description                           |
-| ---------------- | ------------------------------------ | ------------------------------------- |
-| Payment          | `https://pay.example.com/pay`        | User recharge entry                   |
-| My Orders        | `https://pay.example.com/pay/orders` | User views their own recharge history |
-| Order Management | `https://pay.example.com/admin`      | Sub2API admin only                    |
+### User-Facing Pages
+
+Configure the following URLs in the Sub2API admin panel under **Recharge Settings**, so users can navigate from Sub2API to the payment and order pages:
+
+| Setting   | URL                                  | Description                                        |
+| --------- | ------------------------------------ | -------------------------------------------------- |
+| Payment   | `https://pay.example.com/pay`        | User top-up & subscription purchase page           |
+| My Orders | `https://pay.example.com/pay/orders` | User views their own recharge/subscription history |
 
 Sub2API **v0.1.88** and above will automatically append the following parameters — no manual query string needed:
 
@@ -282,7 +313,22 @@ Sub2API **v0.1.88** and above will automatically append the following parameters
 | `user_id` | Sub2API user ID                                   |
 | `token`   | User login token (required to view order history) |
 | `theme`   | `light` (default) or `dark`                       |
+| `lang`    | Interface language, `zh` (default) or `en`        |
 | `ui_mode` | `standalone` (default) or `embedded` (for iframe) |
+
+### Admin Panel
+
+The admin panel is authenticated via the `token` URL parameter (set to the `ADMIN_TOKEN` environment variable). When integrating with Sub2API, just configure the paths — **no query parameters needed** — Sub2API will automatically append `token` and other parameters:
+
+| Page          | URL                                           | Description                                                   |
+| ------------- | --------------------------------------------- | ------------------------------------------------------------- |
+| Overview      | `https://pay.example.com/admin`               | Aggregated entry with card-style navigation                   |
+| Orders        | `https://pay.example.com/admin/orders`        | Filter by status, paginate, view details, retry/cancel/refund |
+| Dashboard     | `https://pay.example.com/admin/dashboard`     | Revenue stats, order trends, payment method breakdown         |
+| Channels      | `https://pay.example.com/admin/channels`      | Configure API channels & rates, sync from Sub2API             |
+| Subscriptions | `https://pay.example.com/admin/subscriptions` | Manage subscription plans & user subscriptions                |
+
+> **Tip**: When accessing directly (not via Sub2API), you need to manually append `?token=YOUR_ADMIN_TOKEN` to the URL. All admin pages share the same token — once you enter any page, you can navigate between modules via the sidebar.
 
 ---
 
@@ -290,39 +336,101 @@ Sub2API **v0.1.88** and above will automatically append the following parameters
 
 Access: `https://pay.example.com/admin?token=YOUR_ADMIN_TOKEN`
 
-| Feature        | Description                                           |
-| -------------- | ----------------------------------------------------- |
-| Order List     | Filter by status, paginate, choose 20/50/100 per page |
-| Order Detail   | View all fields and audit log timeline                |
-| Retry Recharge | Re-trigger recharge for paid-but-failed orders        |
-| Cancel Order   | Force-cancel pending orders                           |
-| Refund         | Issue refund and deduct Sub2API balance               |
+| Module        | Path                   | Description                                                   |
+| ------------- | ---------------------- | ------------------------------------------------------------- |
+| Overview      | `/admin`               | Aggregated entry with card-style navigation                   |
+| Orders        | `/admin/orders`        | Filter by status, paginate, view details, retry/cancel/refund |
+| Dashboard     | `/admin/dashboard`     | Revenue stats, order trends, payment method breakdown         |
+| Channels      | `/admin/channels`      | Configure API channels & rates, sync from Sub2API             |
+| Subscriptions | `/admin/subscriptions` | Manage subscription plans & user subscriptions                |
 
 ---
 
 ## Payment Flow
 
 ```
-User submits recharge amount
+User selects top-up / subscription plan
          │
          ▼
   Create Order (PENDING)
-  ├─ Validate user status / pending order count / daily limit
+  ├─ Validate user status / pending orders / daily limit / channel limit
   └─ Call payment provider to get payment link
          │
          ▼
   User completes payment
-  ├─ EasyPay → QR code / H5 redirect
-  └─ Stripe  → Payment Element (PaymentIntent)
+  ├─ EasyPay       → QR code / H5 redirect
+  ├─ Alipay (official) → PC page payment / H5 mobile web payment
+  ├─ WeChat Pay (official) → Native QR code / H5 payment
+  └─ Stripe        → Payment Element (PaymentIntent)
          │
          ▼
-  Payment callback (signature verified) → Order PAID
+  Payment callback (RSA2 / MD5 / Webhook signature verified) → Order PAID
          │
          ▼
-  Auto-call Sub2API recharge API
-  ├─ Success → COMPLETED, balance credited automatically
+  Auto-call Sub2API recharge / subscription API
+  ├─ Success → COMPLETED, balance credited / subscription activated
   └─ Failure → FAILED (admin can retry)
 ```
+
+---
+
+## API Endpoints
+
+All API paths are prefixed with `/api`.
+
+### Public API
+
+User-facing endpoints, authenticated via `user_id` + `token` URL parameters.
+
+| Method | Path                      | Description                                         |
+| ------ | ------------------------- | --------------------------------------------------- |
+| `GET`  | `/api/user`               | Get current user info                               |
+| `GET`  | `/api/users/:id`          | Get specific user info                              |
+| `POST` | `/api/orders`             | Create recharge / subscription order                |
+| `GET`  | `/api/orders/:id`         | Query order details                                 |
+| `POST` | `/api/orders/:id/cancel`  | User cancels pending order                          |
+| `GET`  | `/api/orders/my`          | List current user's orders                          |
+| `GET`  | `/api/channels`           | Get channel list (for frontend display)             |
+| `GET`  | `/api/subscription-plans` | Get available subscription plans                    |
+| `GET`  | `/api/subscriptions/my`   | Query current user's subscriptions                  |
+| `GET`  | `/api/limits`             | Query recharge limits & payment method availability |
+
+### Payment Callbacks
+
+Called asynchronously by payment providers; signature verified before triggering credit flow.
+
+| Method | Path                   | Description                    |
+| ------ | ---------------------- | ------------------------------ |
+| `GET`  | `/api/easy-pay/notify` | EasyPay async callback         |
+| `POST` | `/api/alipay/notify`   | Alipay (official) callback     |
+| `POST` | `/api/wxpay/notify`    | WeChat Pay (official) callback |
+| `POST` | `/api/stripe/webhook`  | Stripe webhook callback        |
+
+### Admin API
+
+Authenticated via `token` parameter set to `ADMIN_TOKEN`.
+
+| Method   | Path                                | Description                          |
+| -------- | ----------------------------------- | ------------------------------------ |
+| `GET`    | `/api/admin/orders`                 | Order list (paginated, filterable)   |
+| `GET`    | `/api/admin/orders/:id`             | Order details (with audit log)       |
+| `POST`   | `/api/admin/orders/:id/cancel`      | Admin cancels order                  |
+| `POST`   | `/api/admin/orders/:id/retry`       | Retry failed recharge / subscription |
+| `POST`   | `/api/admin/refund`                 | Issue refund                         |
+| `GET`    | `/api/admin/dashboard`              | Dashboard (revenue stats, trends)    |
+| `GET`    | `/api/admin/channels`               | Channel list                         |
+| `POST`   | `/api/admin/channels`               | Create channel                       |
+| `PUT`    | `/api/admin/channels/:id`           | Update channel                       |
+| `DELETE` | `/api/admin/channels/:id`           | Delete channel                       |
+| `GET`    | `/api/admin/subscription-plans`     | Subscription plan list               |
+| `POST`   | `/api/admin/subscription-plans`     | Create subscription plan             |
+| `PUT`    | `/api/admin/subscription-plans/:id` | Update subscription plan             |
+| `DELETE` | `/api/admin/subscription-plans/:id` | Delete subscription plan             |
+| `GET`    | `/api/admin/subscriptions`          | User subscription records            |
+| `GET`    | `/api/admin/config`                 | Get system configuration             |
+| `PUT`    | `/api/admin/config`                 | Update system configuration          |
+| `GET`    | `/api/admin/sub2api/groups`         | Sync channel groups from Sub2API     |
+| `GET`    | `/api/admin/sub2api/search-users`   | Search Sub2API users                 |
 
 ---
 
