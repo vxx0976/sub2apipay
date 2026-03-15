@@ -495,7 +495,7 @@ function PayContent() {
   const showMainTabs = channelsLoaded && !allEntriesClosed && (hasChannels || hasPlans);
   const pageTitle = showMainTabs
     ? pickLocaleText(locale, '选择适合你的 充值/订阅服务', 'Choose Your Recharge / Subscription')
-    : pickLocaleText(locale, 'Sub2API 余额充值', 'Sub2API Balance Recharge');
+    : pickLocaleText(locale, '余额充值', 'Balance Recharge');
   const pageSubtitle = showMainTabs
     ? pickLocaleText(locale, '充值余额或者订阅套餐', 'Top up balance or subscribe to a plan')
     : pickLocaleText(locale, '安全支付，自动到账', 'Secure payment, automatic crediting');
