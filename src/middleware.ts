@@ -28,10 +28,12 @@ export function middleware(request: NextRequest) {
     response.headers.set('Content-Security-Policy', `frame-ancestors *`);
   } else if (origins.size > 0) {
     response.headers.set('Content-Security-Policy', `frame-ancestors 'self' ${[...origins].join(' ')}`);
+  } else {
+    // 没有配置额外 origin 时，保留传统 X-Frame-Options 保护
+    response.headers.set('X-Frame-Options', 'SAMEORIGIN');
   }
 
   response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 
   return response;

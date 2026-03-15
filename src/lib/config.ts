@@ -91,7 +91,7 @@ const envSchema = z.object({
   USD_EXCHANGE_RATE: z.coerce.number().positive().default(6.9), // CNY per 1 USD
   BALANCE_RATIO: z.coerce.number().positive().default(10), // 平台余额倍率（1 USD 实付 → BALANCE_RATIO USD 余额）
 
-  ADMIN_TOKEN: z.string().min(16),
+  ADMIN_TOKEN: z.string().min(1),
 
   NEXT_PUBLIC_APP_URL: z.string().url(),
   PAY_HELP_IMAGE_URL: optionalTrimmedString,
