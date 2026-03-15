@@ -5,6 +5,7 @@ import { queryMethodLimits } from '@/lib/order/limits';
 import { initPaymentProviders, paymentRegistry } from '@/lib/payment';
 import { getPaymentDisplayInfo } from '@/lib/pay-utils';
 import { resolveLocale } from '@/lib/locale';
+import { getSystemConfig } from '@/lib/system-config';
 
 export async function GET(request: NextRequest) {
   const locale = resolveLocale(request.nextUrl.searchParams.get('lang'));
@@ -52,7 +53,12 @@ export async function GET(request: NextRequest) {
             if (type === 'stripe') return allowedCategories.includes('stripe');
             return true;
           });
-    const [user, methodLimits] = await Promise.all([getUser(userId), queryMethodLimits(enabledTypes)]);
+    const [user, methodLimits, balanceDisabledVal] = await Promise.all([
+      getUser(userId),
+      queryMethodLimits(enabledTypes),
+      getSystemConfig('BALANCE_PAYMENT_DISABLED'),
+    ]);
+    const balanceDisabled = balanceDisabledVal === 'true';
 
     // 对商户子用户，使用卖价直接换算：effectiveRatio = USD_EXCHANGE_RATE / selling_price
     // 这样 creditUsd = amount * effectiveRatio / USD_EXCHANGE_RATE = amount / selling_price
@@ -103,6 +109,7 @@ export async function GET(request: NextRequest) {
         helpText: env.PAY_HELP_TEXT ?? null,
         stripePublishableKey:
           enabledTypes.includes('stripe') && env.STRIPE_PUBLISHABLE_KEY ? env.STRIPE_PUBLISHABLE_KEY : null,
+        balanceDisabled,
         sublabelOverrides: Object.keys(sublabelOverrides).length > 0 ? sublabelOverrides : null,
         usdExchangeRate: env.USD_EXCHANGE_RATE,
         balanceRatio: effectiveBalanceRatio,

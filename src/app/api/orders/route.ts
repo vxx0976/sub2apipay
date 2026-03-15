@@ -8,11 +8,24 @@ import { handleApiError } from '@/lib/utils/api';
 
 const createOrderSchema = z.object({
   token: z.string().min(1),
-  amount: z.number().positive(),
+  amount: z.number().positive().max(99999999.99),
   payment_type: z.string().min(1),
   src_host: z.string().max(253).optional(),
-  src_url: z.string().max(2048).optional(),
+  src_url: z
+    .string()
+    .max(2048)
+    .refine((url) => {
+      try {
+        const protocol = new URL(url).protocol;
+        return protocol === 'http:' || protocol === 'https:';
+      } catch {
+        return false;
+      }
+    }, 'src_url must be a valid HTTP/HTTPS URL')
+    .optional(),
   is_mobile: z.boolean().optional(),
+  order_type: z.enum(['balance', 'subscription']).optional(),
+  plan_id: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -25,7 +38,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '参数错误', details: parsed.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    const { token, amount, payment_type, src_host, src_url, is_mobile } = parsed.data;
+    const { token, amount, payment_type, src_host, src_url, is_mobile, order_type, plan_id } = parsed.data;
 
     // 通过 token 解析用户身份
     let userId: number;
@@ -40,12 +53,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '无效的 token，请重新登录', code: 'INVALID_TOKEN' }, { status: 401 });
     }
 
-    // Validate amount range
-    if (amount < env.MIN_RECHARGE_AMOUNT || amount > env.MAX_RECHARGE_AMOUNT) {
-      return NextResponse.json(
-        { error: `充值金额需在 ${env.MIN_RECHARGE_AMOUNT} - ${env.MAX_RECHARGE_AMOUNT} 之间` },
-        { status: 400 },
-      );
+    // 订阅订单跳过金额范围校验（价格由服务端套餐决定）
+    if (order_type !== 'subscription') {
+      if (amount < env.MIN_RECHARGE_AMOUNT || amount > env.MAX_RECHARGE_AMOUNT) {
+        return NextResponse.json(
+          { error: `充值金额需在 ${env.MIN_RECHARGE_AMOUNT} - ${env.MAX_RECHARGE_AMOUNT} 之间` },
+          { status: 400 },
+        );
+      }
     }
 
     // Validate payment type is enabled
@@ -65,6 +80,8 @@ export async function POST(request: NextRequest) {
       srcHost: src_host,
       srcUrl: src_url,
       resellerSellingPrice,
+      orderType: order_type,
+      planId: plan_id,
     });
 
     // 不向客户端暴露 userName / userBalance 等隐私字段

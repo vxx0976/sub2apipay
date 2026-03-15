@@ -2,48 +2,35 @@
 
 import { useSearchParams } from 'next/navigation';
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import OrderTable from '@/components/admin/OrderTable';
-import OrderDetail from '@/components/admin/OrderDetail';
-import PaginationBar from '@/components/PaginationBar';
 import PayPageLayout from '@/components/PayPageLayout';
-import { resolveLocale, type Locale } from '@/lib/locale';
+import DashboardStats from '@/components/admin/DashboardStats';
+import DailyChart from '@/components/admin/DailyChart';
+import Leaderboard from '@/components/admin/Leaderboard';
+import PaymentMethodChart from '@/components/admin/PaymentMethodChart';
+import { resolveLocale } from '@/lib/locale';
 
-interface AdminOrder {
-  id: string;
-  userId: number;
-  userName: string | null;
-  userEmail: string | null;
-  userNotes: string | null;
-  amount: number;
-  status: string;
-  paymentType: string;
-  createdAt: string;
-  paidAt: string | null;
-  completedAt: string | null;
-  failedReason: string | null;
-  expiresAt: string;
-  srcHost: string | null;
+interface DashboardData {
+  summary: {
+    today: { amount: number; orderCount: number; paidCount: number };
+    total: { amount: number; orderCount: number; paidCount: number };
+    successRate: number;
+    avgAmount: number;
+  };
+  dailySeries: { date: string; amount: number; count: number }[];
+  leaderboard: {
+    userId: number;
+    userName: string | null;
+    userEmail: string | null;
+    totalAmount: number;
+    orderCount: number;
+  }[];
+  paymentMethods: { paymentType: string; amount: number; count: number; percentage: number }[];
+  meta: { days: number; generatedAt: string };
 }
 
-interface AdminOrderDetail extends AdminOrder {
-  rechargeCode: string;
-  paymentTradeNo: string | null;
-  refundAmount: number | null;
-  refundReason: string | null;
-  refundAt: string | null;
-  forceRefund: boolean;
-  failedAt: string | null;
-  updatedAt: string;
-  clientIp: string | null;
-  srcHost: string | null;
-  srcUrl: string | null;
-  paymentSuccess?: boolean;
-  rechargeSuccess?: boolean;
-  rechargeStatus?: string;
-  auditLogs: { id: string; action: string; detail: string | null; operator: string | null; createdAt: string }[];
-}
+const DAYS_OPTIONS = [7, 30, 90] as const;
 
-function AdminContent() {
+function DashboardContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const theme = searchParams.get('theme') === 'dark' ? 'dark' : 'light';
@@ -59,81 +46,39 @@ function AdminContent() {
           missingTokenHint: 'Please access the admin page from the Sub2API platform.',
           invalidToken: 'Invalid admin token',
           requestFailed: 'Request failed',
-          loadOrdersFailed: 'Failed to load orders',
-          retryConfirm: 'Retry recharge for this order?',
-          retryFailed: 'Retry failed',
-          retryRequestFailed: 'Retry request failed',
-          cancelConfirm: 'Cancel this order?',
-          cancelFailed: 'Cancel failed',
-          cancelRequestFailed: 'Cancel request failed',
-          loadDetailFailed: 'Failed to load order details',
-          title: 'Order Management',
-          subtitle: 'View and manage all recharge orders',
-          dashboard: 'Dashboard',
+          loadFailed: 'Failed to load data',
+          title: 'Dashboard',
+          subtitle: 'Recharge order analytics and insights',
+          daySuffix: 'd',
+          orders: 'Order Management',
           refresh: 'Refresh',
           loading: 'Loading...',
-          statuses: {
-            '': 'All',
-            PENDING: 'Pending',
-            PAID: 'Paid',
-            RECHARGING: 'Recharging',
-            COMPLETED: 'Completed',
-            EXPIRED: 'Expired',
-            CANCELLED: 'Cancelled',
-            FAILED: 'Recharge failed',
-            REFUNDED: 'Refunded',
-          },
         }
       : {
           missingToken: '缺少管理员凭证',
           missingTokenHint: '请从 Sub2API 平台正确访问管理页面',
           invalidToken: '管理员凭证无效',
           requestFailed: '请求失败',
-          loadOrdersFailed: '加载订单列表失败',
-          retryConfirm: '确认重试充值？',
-          retryFailed: '重试失败',
-          retryRequestFailed: '重试请求失败',
-          cancelConfirm: '确认取消该订单？',
-          cancelFailed: '取消失败',
-          cancelRequestFailed: '取消请求失败',
-          loadDetailFailed: '加载订单详情失败',
-          title: '订单管理',
-          subtitle: '查看和管理所有充值订单',
-          dashboard: '数据概览',
+          loadFailed: '加载数据失败',
+          title: '数据概览',
+          subtitle: '充值订单统计与分析',
+          daySuffix: '天',
+          orders: '订单管理',
           refresh: '刷新',
           loading: '加载中...',
-          statuses: {
-            '': '全部',
-            PENDING: '待支付',
-            PAID: '已支付',
-            RECHARGING: '充值中',
-            COMPLETED: '已完成',
-            EXPIRED: '已超时',
-            CANCELLED: '已取消',
-            FAILED: '充值失败',
-            REFUNDED: '已退款',
-          },
         };
 
-  const [orders, setOrders] = useState<AdminOrder[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [totalPages, setTotalPages] = useState(1);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [days, setDays] = useState<number>(30);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [detailOrder, setDetailOrder] = useState<AdminOrderDetail | null>(null);
-
-  const fetchOrders = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!token) return;
     setLoading(true);
+    setError('');
     try {
-      const params = new URLSearchParams({ token, page: String(page), page_size: String(pageSize) });
-      if (statusFilter) params.set('status', statusFilter);
-
-      const res = await fetch(`/api/admin/orders?${params}`);
+      const res = await fetch(`/api/admin/dashboard?token=${encodeURIComponent(token)}&days=${days}`);
       if (!res.ok) {
         if (res.status === 401) {
           setError(text.invalidToken);
@@ -141,86 +86,33 @@ function AdminContent() {
         }
         throw new Error(text.requestFailed);
       }
-
-      const data = await res.json();
-      setOrders(data.orders);
-      setTotal(data.total);
-      setTotalPages(data.total_pages);
+      setData(await res.json());
     } catch {
-      setError(text.loadOrdersFailed);
+      setError(text.loadFailed);
     } finally {
       setLoading(false);
     }
-  }, [token, page, pageSize, statusFilter]);
+  }, [token, days]);
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    fetchData();
+  }, [fetchData]);
 
   if (!token) {
     return (
       <div className={`flex min-h-screen items-center justify-center p-4 ${isDark ? 'bg-slate-950' : 'bg-slate-50'}`}>
         <div className="text-center text-red-500">
           <p className="text-lg font-medium">{text.missingToken}</p>
-          <p className="mt-2 text-sm text-gray-500">{text.missingTokenHint}</p>
+          <p className={`mt-2 text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{text.missingTokenHint}</p>
         </div>
       </div>
     );
   }
 
-  const handleRetry = async (orderId: string) => {
-    if (!confirm(text.retryConfirm)) return;
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/retry?token=${token}`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        fetchOrders();
-      } else {
-        const data = await res.json();
-        setError(data.error || text.retryFailed);
-      }
-    } catch {
-      setError(text.retryRequestFailed);
-    }
-  };
-
-  const handleCancel = async (orderId: string) => {
-    if (!confirm(text.cancelConfirm)) return;
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}/cancel?token=${token}`, {
-        method: 'POST',
-      });
-      if (res.ok) {
-        fetchOrders();
-      } else {
-        const data = await res.json();
-        setError(data.error || text.cancelFailed);
-      }
-    } catch {
-      setError(text.cancelRequestFailed);
-    }
-  };
-
-  const handleViewDetail = async (orderId: string) => {
-    try {
-      const res = await fetch(`/api/admin/orders/${orderId}?token=${token}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDetailOrder(data);
-      }
-    } catch {
-      setError(text.loadDetailFailed);
-    }
-  };
-
-  const statuses = ['', 'PENDING', 'PAID', 'RECHARGING', 'COMPLETED', 'EXPIRED', 'CANCELLED', 'FAILED', 'REFUNDED'];
-  const statusLabels: Record<string, string> = text.statuses;
-
   const navParams = new URLSearchParams();
-  if (token) navParams.set('token', token);
+  navParams.set('token', token);
   if (locale === 'en') navParams.set('lang', 'en');
-  if (isDark) navParams.set('theme', 'dark');
+  if (theme === 'dark') navParams.set('theme', 'dark');
   if (isEmbedded) navParams.set('ui_mode', 'embedded');
 
   const btnBase = [
@@ -228,6 +120,11 @@ function AdminContent() {
     isDark
       ? 'border-slate-600 text-slate-200 hover:bg-slate-800'
       : 'border-slate-300 text-slate-700 hover:bg-slate-100',
+  ].join(' ');
+
+  const btnActive = [
+    'inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium',
+    isDark ? 'bg-indigo-500/30 text-indigo-200 ring-1 ring-indigo-400/40' : 'bg-blue-600 text-white',
   ].join(' ');
 
   return (
@@ -239,10 +136,16 @@ function AdminContent() {
       subtitle={text.subtitle}
       actions={
         <>
-          <a href={`/admin/dashboard?${navParams}`} className={btnBase}>
-            {text.dashboard}
+          {DAYS_OPTIONS.map((d) => (
+            <button key={d} type="button" onClick={() => setDays(d)} className={days === d ? btnActive : btnBase}>
+              {d}
+              {text.daySuffix}
+            </button>
+          ))}
+          <a href={`/admin/orders?${navParams}`} className={btnBase}>
+            {text.orders}
           </a>
-          <button type="button" onClick={fetchOrders} className={btnBase}>
+          <button type="button" onClick={fetchData} className={btnBase}>
             {text.refresh}
           </button>
         </>
@@ -259,90 +162,37 @@ function AdminContent() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        {statuses.map((s) => (
-          <button
-            key={s}
-            onClick={() => {
-              setStatusFilter(s);
-              setPage(1);
-            }}
-            className={[
-              'rounded-full px-3 py-1 text-sm transition-colors',
-              statusFilter === s
-                ? isDark
-                  ? 'bg-indigo-500/30 text-indigo-200 ring-1 ring-indigo-400/40'
-                  : 'bg-blue-600 text-white'
-                : isDark
-                  ? 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-            ].join(' ')}
-          >
-            {statusLabels[s]}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div
-        className={[
-          'rounded-xl border',
-          isDark ? 'border-slate-700 bg-slate-800/70' : 'border-slate-200 bg-white shadow-sm',
-        ].join(' ')}
-      >
-        {loading ? (
-          <div className={`py-12 text-center ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{text.loading}</div>
-        ) : (
-          <OrderTable
-            orders={orders}
-            onRetry={handleRetry}
-            onCancel={handleCancel}
-            onViewDetail={handleViewDetail}
-            dark={isDark}
-            locale={locale}
-          />
-        )}
-      </div>
-
-      <PaginationBar
-        page={page}
-        totalPages={totalPages}
-        total={total}
-        pageSize={pageSize}
-        loading={loading}
-        onPageChange={(p) => setPage(p)}
-        onPageSizeChange={(s) => {
-          setPageSize(s);
-          setPage(1);
-        }}
-        locale={locale}
-        isDark={isDark}
-      />
-
-      {/* Order Detail */}
-      {detailOrder && (
-        <OrderDetail order={detailOrder} onClose={() => setDetailOrder(null)} dark={isDark} locale={locale} />
-      )}
+      {loading ? (
+        <div className={`py-24 text-center ${isDark ? 'text-slate-400' : 'text-gray-500'}`}>{text.loading}</div>
+      ) : data ? (
+        <div className="space-y-6">
+          <DashboardStats summary={data.summary} dark={isDark} locale={locale} />
+          <DailyChart data={data.dailySeries} dark={isDark} locale={locale} />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Leaderboard data={data.leaderboard} dark={isDark} locale={locale} />
+            <PaymentMethodChart data={data.paymentMethods} dark={isDark} locale={locale} />
+          </div>
+        </div>
+      ) : null}
     </PayPageLayout>
   );
 }
 
-function AdminPageFallback() {
+function DashboardPageFallback() {
   const searchParams = useSearchParams();
   const locale = resolveLocale(searchParams.get('lang'));
 
   return (
     <div className="flex min-h-screen items-center justify-center">
-      <div className="text-gray-500">{locale === 'en' ? 'Loading...' : '加载中...'}</div>
+      <div className="text-slate-500">{locale === 'en' ? 'Loading...' : '加载中...'}</div>
     </div>
   );
 }
 
-export default function AdminPage() {
+export default function DashboardPage() {
   return (
-    <Suspense fallback={<AdminPageFallback />}>
-      <AdminContent />
+    <Suspense fallback={<DashboardPageFallback />}>
+      <DashboardContent />
     </Suspense>
   );
 }

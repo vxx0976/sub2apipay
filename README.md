@@ -2,7 +2,7 @@
 
 **语言 / Language**: 中文（当前）｜ [English](./README.en.md)
 
-Sub2ApiPay 是为 [Sub2API](https://sub2api.com) 平台构建的自托管充值支付网关。支持支付宝、微信支付（通过 EasyPay 聚合）和 Stripe，订单支付成功后自动调用 Sub2API 管理接口完成余额到账，无需人工干预。
+Sub2ApiPay 是为 [Sub2API](https://sub2api.com) 平台构建的自托管支付网关。支持 **EasyPay 易支付聚合**、**支付宝官方**、**微信官方**和 **Stripe** 四种支付渠道，提供按量充值与套餐订阅两种计费模式，支付成功后自动调用 Sub2API 管理接口完成到账，无需人工干预。
 
 ---
 
@@ -14,21 +14,32 @@ Sub2ApiPay 是为 [Sub2API](https://sub2api.com) 平台构建的自托管充值�
 - [环境变量](#环境变量)
 - [部署指南](#部署指南)
 - [集成到 Sub2API](#集成到-sub2api)
-- [管理后台](#管理后台)
 - [支付流程](#支付流程)
+- [API 端点](#api-端点)
 - [开发指南](#开发指南)
 
 ---
 
 ## 功能特性
 
-- **多支付方式** — 支付宝、微信支付（EasyPay 聚合）、Stripe 信用卡
-- **自动到账** — 支付回调验签后自动调用 Sub2API 充值接口，全程无需人工
+- **四渠道支付** — EasyPay 易支付聚合、支付宝官方、微信官方、Stripe
+- **双计费模式** — 按量余额充值 + 套餐订阅，灵活适配不同业务场景
+- **自动到账** — 支付回调验签后自动调用 Sub2API 充值 / 订阅接口，全程无需人工
 - **订单全生命周期** — 超时自动取消、用户主动取消、管理员取消、退款
-- **限额控制** — 可配置单笔上限与每日累计上限，按用户维度统计
-- **安全设计** — Token 鉴权、MD5/Webhook 签名验证、时序安全对比、完整审计日志
-- **响应式 UI** — PC + 移动端自适应，支持深色模式，支持 iframe 嵌入
-- **管理后台** — 订单列表（分页/筛选）、订单详情、重试充值、退款
+- **限额控制** — 单笔上限、每日用户累计上限、每日渠道全局限额，多维度风控
+- **安全设计** — Token 鉴权、RSA2 / MD5 / Webhook 签名验证、时序安全对比、完整审计日志
+- **响应式 UI** — PC + 移动端自适应，暗色 / 亮色主题，支持 iframe 嵌入
+- **中英双语** — 支付页面自动适配中英文
+- **管理后台** — 数据概览、订单管理（分页/筛选/重试/退款）、渠道管理、订阅管理
+
+> **EasyPay 推荐**：个人推荐 [ZPay](https://z-pay.cn/?uid=23808)（`https://z-pay.cn/?uid=23808`）作为 EasyPay 服务商（链接含作者邀请码，介意可去掉）。ZPay 支持**个人用户**（无营业执照）每日 1 万元以内交易；拥有营业执照则无限额。支付渠道的安全性、稳定性及合规性请自行鉴别，本项目不对任何第三方支付服务商做担保或背书。
+
+<details>
+<summary>ZPay 申请二维码</summary>
+
+![ZPay 预览](./docs/zpay-preview.png)
+
+</details>
 
 ---
 
@@ -99,33 +110,18 @@ docker compose up -d --build
 **第一步**：通过 `PAYMENT_PROVIDERS` 声明启用哪些支付服务商（逗号分隔）：
 
 ```env
-# 仅易支付
+# 可选值: easypay, alipay, wxpay, stripe
+# 示例：仅使用 EasyPay 易支付聚合
 PAYMENT_PROVIDERS=easypay
-# 仅 Stripe
-PAYMENT_PROVIDERS=stripe
-# 两者都用
-PAYMENT_PROVIDERS=easypay,stripe
+# 示例：同时启用支付宝官方 + 微信官方 + Stripe
+PAYMENT_PROVIDERS=alipay,wxpay,stripe
 ```
 
-**第二步**：通过 `ENABLED_PAYMENT_TYPES` 控制向用户展示哪些支付渠道：
+> **支付宝官方 / 微信官方**与 **EasyPay** 可以共存。官方渠道直接对接支付宝/微信 API，资金直达商户账户，手续费更低；EasyPay 通过第三方平台代收/转发官方，接入门槛更低。使用 EasyPay 时请尽量选择资金直接走转发官方直达自己账户的形式，而非第三方代收的服务商。
 
-```env
-# 易支付支持: alipay, wxpay；Stripe 支持: stripe
-ENABLED_PAYMENT_TYPES=alipay,wxpay
-```
+#### EasyPay（支付宝 / 微信支付聚合）
 
-#### EasyPay（支付宝 / 微信支付）
-
-支付提供商只需兼容**易支付（EasyPay）协议**即可接入，例如 [ZPay](https://z-pay.cn/?uid=23808)（`https://z-pay.cn/?uid=23808`）等平台（链接含本项目作者的邀请码，介意可去掉）。
-
-<details>
-<summary>ZPay 申请二维码</summary>
-
-![ZPay 预览](./docs/zpay-preview.png)
-
-</details>
-
-> **注意**：支付渠道的安全性、稳定性及合规性请自行鉴别，本项目不对任何第三方支付服务商做担保或背书。
+任何兼容**易支付（EasyPay）协议**的支付服务商均可接入。
 
 | 变量                  | 说明                                                          |
 | --------------------- | ------------------------------------------------------------- |
@@ -136,6 +132,33 @@ ENABLED_PAYMENT_TYPES=alipay,wxpay
 | `EASY_PAY_RETURN_URL` | 支付完成跳转地址，填 `${NEXT_PUBLIC_APP_URL}/pay/result`      |
 | `EASY_PAY_CID_ALIPAY` | 支付宝通道 ID（可选）                                         |
 | `EASY_PAY_CID_WXPAY`  | 微信支付通道 ID（可选）                                       |
+
+#### 支付宝官方
+
+直接对接支付宝开放平台，支持 PC 页面支付（`alipay.trade.page.pay`）和手机网站支付（`alipay.trade.wap.pay`），自动根据终端类型切换。
+
+| 变量                 | 说明                         |
+| -------------------- | ---------------------------- |
+| `ALIPAY_APP_ID`      | 支付宝应用 AppID             |
+| `ALIPAY_PRIVATE_KEY` | 应用私钥（内容或文件路径）   |
+| `ALIPAY_PUBLIC_KEY`  | 支付宝公钥（内容或文件路径） |
+| `ALIPAY_NOTIFY_URL`  | 异步回调地址                 |
+| `ALIPAY_RETURN_URL`  | 同步跳转地址（可选）         |
+
+#### 微信官方
+
+直接对接微信支付 APIv3，支持 Native 扫码支付和 H5 支付，移动端优先尝试 H5，自动 fallback 到扫码。
+
+| 变量                  | 说明                            |
+| --------------------- | ------------------------------- |
+| `WXPAY_APP_ID`        | 微信支付 AppID                  |
+| `WXPAY_MCH_ID`        | 商户号                          |
+| `WXPAY_PRIVATE_KEY`   | 商户 API 私钥（内容或文件路径） |
+| `WXPAY_CERT_SERIAL`   | 商户证书序列号                  |
+| `WXPAY_API_V3_KEY`    | APIv3 密钥                      |
+| `WXPAY_PUBLIC_KEY`    | 微信支付公钥（内容或文件路径）  |
+| `WXPAY_PUBLIC_KEY_ID` | 微信支付公钥 ID                 |
+| `WXPAY_NOTIFY_URL`    | 异步回调地址                    |
 
 #### Stripe
 
@@ -150,13 +173,17 @@ ENABLED_PAYMENT_TYPES=alipay,wxpay
 
 ### 业务规则
 
-| 变量                        | 说明                               | 默认值                     |
-| --------------------------- | ---------------------------------- | -------------------------- |
-| `MIN_RECHARGE_AMOUNT`       | 单笔最低充值金额（元）             | `1`                        |
-| `MAX_RECHARGE_AMOUNT`       | 单笔最高充值金额（元）             | `1000`                     |
-| `MAX_DAILY_RECHARGE_AMOUNT` | 每日累计最高充值（元，`0` = 不限） | `10000`                    |
-| `ORDER_TIMEOUT_MINUTES`     | 订单超时分钟数                     | `5`                        |
-| `PRODUCT_NAME`              | 充值商品名称（显示在支付页）       | `Sub2API Balance Recharge` |
+| 变量                             | 说明                                     | 默认值                     |
+| -------------------------------- | ---------------------------------------- | -------------------------- |
+| `MIN_RECHARGE_AMOUNT`            | 单笔最低充值金额（元）                   | `1`                        |
+| `MAX_RECHARGE_AMOUNT`            | 单笔最高充值金额（元）                   | `1000`                     |
+| `MAX_DAILY_RECHARGE_AMOUNT`      | 每日每用户累计最高充值（元，`0` = 不限） | `10000`                    |
+| `MAX_DAILY_AMOUNT_ALIPAY`        | 易支付支付宝渠道每日全局限额（可选）     | 由提供商默认               |
+| `MAX_DAILY_AMOUNT_ALIPAY_DIRECT` | 支付宝官方渠道每日全局限额（可选）       | 由提供商默认               |
+| `MAX_DAILY_AMOUNT_WXPAY`         | 微信支付渠道每日全局限额（可选）         | 由提供商默认               |
+| `MAX_DAILY_AMOUNT_STRIPE`        | Stripe 渠道每日全局限额（可选）          | 由提供商默认               |
+| `ORDER_TIMEOUT_MINUTES`          | 订单超时分钟数                           | `5`                        |
+| `PRODUCT_NAME`                   | 充值商品名称（显示在支付页）             | `Sub2API Balance Recharge` |
 
 ### UI 定制（可选）
 
@@ -265,13 +292,16 @@ docker compose exec app npx prisma migrate deploy
 
 ## 集成到 Sub2API
 
-在 Sub2API 管理后台可配置以下页面链接：
+假设本服务部署在 `https://pay.example.com`。
 
-| 页面     | 链接                                 | 说明                    |
-| -------- | ------------------------------------ | ----------------------- |
-| 充值页面 | `https://pay.example.com/pay`        | 用户充值入口            |
-| 我的订单 | `https://pay.example.com/pay/orders` | 用户查看自己的充值记录  |
-| 订单管理 | `https://pay.example.com/admin`      | 仅 Sub2API 管理员可访问 |
+### 用户端页面
+
+在 Sub2API 管理后台的**充值设置**中配置以下链接，用户即可从 Sub2API 平台跳转到充值和订单页面：
+
+| 配置项   | URL                                  | 说明                        |
+| -------- | ------------------------------------ | --------------------------- |
+| 充值页面 | `https://pay.example.com/pay`        | 用户充值、购买订阅套餐入口  |
+| 我的订单 | `https://pay.example.com/pay/orders` | 用户查看自己的充值/订阅记录 |
 
 Sub2API **v0.1.88** 及以上版本会自动拼接以下参数，无需手动添加：
 
@@ -280,47 +310,110 @@ Sub2API **v0.1.88** 及以上版本会自动拼接以下参数，无需手动添
 | `user_id` | Sub2API 用户 ID                                  |
 | `token`   | 用户登录 Token（有 token 才能查看订单历史）      |
 | `theme`   | `light`（默认）或 `dark`                         |
+| `lang`    | 界面语言，`zh`（默认）或 `en`                    |
 | `ui_mode` | `standalone`（默认）或 `embedded`（iframe 嵌入） |
 
----
+### 管理后台
 
-## 管理后台
+管理后台通过 URL 参数 `token` 鉴权（值为环境变量 `ADMIN_TOKEN`）。在 Sub2API 中集成时只需配置路径，**无需附加任何查询参数**——Sub2API 会自动拼接 `token` 等参数：
 
-访问：`https://pay.example.com/admin?token=YOUR_ADMIN_TOKEN`
+| 页面     | URL                                           | 说明                                           |
+| -------- | --------------------------------------------- | ---------------------------------------------- |
+| 管理总览 | `https://pay.example.com/admin`               | 聚合入口，卡片式导航到各管理模块               |
+| 订单管理 | `https://pay.example.com/admin/orders`        | 按状态筛选、分页浏览、订单详情、重试/取消/退款 |
+| 数据概览 | `https://pay.example.com/admin/dashboard`     | 收入统计、订单趋势、支付方式分布               |
+| 渠道管理 | `https://pay.example.com/admin/channels`      | 配置 API 渠道与倍率，支持从 Sub2API 同步       |
+| 订阅管理 | `https://pay.example.com/admin/subscriptions` | 管理订阅套餐与用户订阅                         |
 
-| 功能     | 说明                                        |
-| -------- | ------------------------------------------- |
-| 订单列表 | 按状态筛选、分页浏览，支持每页 20/50/100 条 |
-| 订单详情 | 查看完整字段与操作审计日志                  |
-| 重试充值 | 对已支付但充值失败的订单重新发起充值        |
-| 取消订单 | 强制取消待支付订单                          |
-| 退款     | 对已完成订单发起退款并扣减 Sub2API 余额     |
+> **提示**：若独立访问（不通过 Sub2API 跳转），需手动在 URL 后添加 `?token=YOUR_ADMIN_TOKEN`。管理后台所有页面间共享同一个 token，进入任一页面后可通过侧边导航切换。
 
 ---
 
 ## 支付流程
 
 ```
-用户提交充值金额
+用户选择充值 / 订阅套餐
        │
        ▼
   创建订单 (PENDING)
-  ├─ 校验用户状态 / 待支付订单数 / 每日限额
+  ├─ 校验用户状态 / 待支付订单数 / 每日限额 / 渠道限额
   └─ 调用支付提供商获取支付链接
        │
        ▼
   用户完成支付
-  ├─ EasyPay → 扫码 / H5 跳转
-  └─ Stripe  → Payment Element (PaymentIntent)
+  ├─ EasyPay   → 扫码 / H5 跳转
+  ├─ 支付宝官方 → PC 页面支付 / H5 手机网站支付
+  ├─ 微信官方   → Native 扫码 / H5 支付
+  └─ Stripe    → Payment Element (PaymentIntent)
        │
        ▼
-  支付回调（签名验证）→ 订单 PAID
+  支付回调（RSA2 / MD5 / Webhook 签名验证）→ 订单 PAID
        │
        ▼
-  自动调用 Sub2API 充值接口
-  ├─ 成功 → COMPLETED，余额自动到账
+  自动调用 Sub2API 充值 / 订阅接口
+  ├─ 成功 → COMPLETED，余额到账 / 订阅生效
   └─ 失败 → FAILED（管理员可重试）
 ```
+
+---
+
+## API 端点
+
+所有 API 路径前缀为 `/api`。
+
+### 公开 API
+
+用户侧接口，通过 URL 参数 `user_id` + `token` 鉴权。
+
+| 方法   | 路径                      | 说明                           |
+| ------ | ------------------------- | ------------------------------ |
+| `GET`  | `/api/user`               | 获取当前用户信息               |
+| `GET`  | `/api/users/:id`          | 获取指定用户信息               |
+| `POST` | `/api/orders`             | 创建充值 / 订阅订单            |
+| `GET`  | `/api/orders/:id`         | 查询订单详情                   |
+| `POST` | `/api/orders/:id/cancel`  | 用户取消待支付订单             |
+| `GET`  | `/api/orders/my`          | 查询当前用户的订单列表         |
+| `GET`  | `/api/channels`           | 获取渠道列表（前端展示用）     |
+| `GET`  | `/api/subscription-plans` | 获取在售订阅套餐列表           |
+| `GET`  | `/api/subscriptions/my`   | 查询当前用户的订阅状态         |
+| `GET`  | `/api/limits`             | 查询充值限额与支付方式可用状态 |
+
+### 支付回调
+
+由支付服务商异步调用，签名验证后触发到账流程。
+
+| 方法   | 路径                   | 说明                    |
+| ------ | ---------------------- | ----------------------- |
+| `GET`  | `/api/easy-pay/notify` | EasyPay 异步回调（GET） |
+| `POST` | `/api/alipay/notify`   | 支付宝官方异步回调      |
+| `POST` | `/api/wxpay/notify`    | 微信官方异步回调        |
+| `POST` | `/api/stripe/webhook`  | Stripe Webhook 回调     |
+
+### 管理 API
+
+需通过 `token` 参数传递 `ADMIN_TOKEN` 鉴权。
+
+| 方法     | 路径                                | 说明                       |
+| -------- | ----------------------------------- | -------------------------- |
+| `GET`    | `/api/admin/orders`                 | 订单列表（分页、状态筛选） |
+| `GET`    | `/api/admin/orders/:id`             | 订单详情（含审计日志）     |
+| `POST`   | `/api/admin/orders/:id/cancel`      | 管理员取消订单             |
+| `POST`   | `/api/admin/orders/:id/retry`       | 重试失败的充值 / 订阅      |
+| `POST`   | `/api/admin/refund`                 | 发起退款                   |
+| `GET`    | `/api/admin/dashboard`              | 数据概览（收入统计、趋势） |
+| `GET`    | `/api/admin/channels`               | 渠道列表                   |
+| `POST`   | `/api/admin/channels`               | 创建渠道                   |
+| `PUT`    | `/api/admin/channels/:id`           | 更新渠道                   |
+| `DELETE` | `/api/admin/channels/:id`           | 删除渠道                   |
+| `GET`    | `/api/admin/subscription-plans`     | 订阅套餐列表               |
+| `POST`   | `/api/admin/subscription-plans`     | 创建订阅套餐               |
+| `PUT`    | `/api/admin/subscription-plans/:id` | 更新订阅套餐               |
+| `DELETE` | `/api/admin/subscription-plans/:id` | 删除订阅套餐               |
+| `GET`    | `/api/admin/subscriptions`          | 用户订阅记录列表           |
+| `GET`    | `/api/admin/config`                 | 获取系统配置               |
+| `PUT`    | `/api/admin/config`                 | 更新系统配置               |
+| `GET`    | `/api/admin/sub2api/groups`         | 从 Sub2API 同步渠道分组    |
+| `GET`    | `/api/admin/sub2api/search-users`   | 搜索 Sub2API 用户          |
 
 ---
 

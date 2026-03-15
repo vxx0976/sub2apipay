@@ -15,7 +15,7 @@ RUN pnpm prisma generate
 RUN DATABASE_URL="postgresql://x:x@localhost/x" \
     SUB2API_BASE_URL="https://localhost" \
     SUB2API_ADMIN_API_KEY="build-dummy" \
-    ADMIN_TOKEN="build-dummy" \
+    ADMIN_TOKEN="build-dummy-placeholder-key" \
     NEXT_PUBLIC_APP_URL="https://localhost" \
     pnpm build
 

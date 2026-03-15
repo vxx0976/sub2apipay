@@ -29,6 +29,8 @@ interface PaymentFormProps {
   usdExchangeRate?: number;
   balanceRatio?: number;
   locale?: Locale;
+  /** 固定金额模式：隐藏金额选择，只显示支付方式和提交按钮 */
+  fixedAmount?: number;
 }
 
 const QUICK_AMOUNTS_CNY = [10, 30, 50, 100, 200];
@@ -54,6 +56,7 @@ export default function PaymentForm({
   usdExchangeRate = 6.9,
   balanceRatio = 10,
   locale = 'zh',
+  fixedAmount,
 }: PaymentFormProps) {
   const [paymentType, setPaymentType] = useState(enabledPaymentTypes[0] || 'alipay');
   const [creditText, setCreditText] = useState('');  // 到账余额 USD
@@ -63,7 +66,7 @@ export default function PaymentForm({
     ? paymentType
     : enabledPaymentTypes[0] || 'stripe';
 
-  const cnyAmount = parseFloat(cnyText) || 0;
+  const cnyAmount = fixedAmount ?? (parseFloat(cnyText) || 0);
 
   const isMethodAvailable = !methodLimits || methodLimits[effectivePaymentType]?.available !== false;
   const methodSingleMax = methodLimits?.[effectivePaymentType]?.singleMax;
@@ -180,79 +183,97 @@ export default function PaymentForm({
         )}
       </div>
 
-      {/* 到账余额 USD */}
-      <div>
-        <label className={['mb-2 block text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
-          {locale === 'en' ? 'Credit Amount (USD)' : '到账余额（美元）'}
-        </label>
-        <div className="relative">
-          <span className={prefixClass}>$</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={creditText}
-            onChange={(e) => handleCreditChange(e.target.value)}
-            placeholder="0.00"
-            className={inputClass}
-          />
+      {fixedAmount ? (
+        <div
+          className={[
+            'rounded-xl border p-4 text-center',
+            dark ? 'border-slate-700 bg-slate-800/60' : 'border-slate-200 bg-slate-50',
+          ].join(' ')}
+        >
+          <div className={['text-xs uppercase tracking-wide', dark ? 'text-slate-400' : 'text-slate-500'].join(' ')}>
+            {locale === 'en' ? 'Recharge Amount' : '充值金额'}
+          </div>
+          <div className={['mt-1 text-3xl font-bold', dark ? 'text-emerald-400' : 'text-emerald-600'].join(' ')}>
+            ¥{fixedAmount.toFixed(2)}
+          </div>
         </div>
-      </div>
+      ) : (
+        <>
+          {/* 到账余额 USD */}
+          <div>
+            <label className={['mb-2 block text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+              {locale === 'en' ? 'Credit Amount (USD)' : '到账余额（美元）'}
+            </label>
+            <div className="relative">
+              <span className={prefixClass}>$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={creditText}
+                onChange={(e) => handleCreditChange(e.target.value)}
+                placeholder="0.00"
+                className={inputClass}
+              />
+            </div>
+          </div>
 
-      {/* 快捷金额（按 CNY） */}
-      {validQuickAmounts.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {validQuickAmounts.map((cny) => (
-            <button
-              key={cny}
-              type="button"
-              onClick={() => handleQuickAmount(cny)}
-              className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
-                cnyAmount === cny
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : dark
-                    ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              ¥{cny}
-            </button>
-          ))}
-        </div>
+          {/* 快捷金额（按 CNY） */}
+          {validQuickAmounts.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {validQuickAmounts.map((cny) => (
+                <button
+                  key={cny}
+                  type="button"
+                  onClick={() => handleQuickAmount(cny)}
+                  className={`rounded-lg border px-4 py-1.5 text-sm font-medium transition-colors ${
+                    cnyAmount === cny
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : dark
+                        ? 'border-slate-700 bg-slate-900 text-slate-200 hover:border-slate-500'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  ¥{cny}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 实付人民币 */}
+          <div>
+            <label className={['mb-2 block text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
+              {locale === 'en' ? 'Amount to Pay (CNY)' : '实付金额（人民币）'}
+            </label>
+            <div className="relative">
+              <span className={prefixClass}>¥</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={cnyText}
+                onChange={(e) => handleCnyChange(e.target.value)}
+                placeholder="0.00"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {cnyText !== '' && !isValid && (() => {
+            const num = parseFloat(cnyText);
+            let msg = locale === 'en'
+              ? 'Amount must be within range and support up to 2 decimal places'
+              : '金额需在范围内，且最多支持 2 位小数（精确到分）';
+            if (!isNaN(num)) {
+              if (num < minAmount) msg = locale === 'en'
+                ? `Minimum per transaction: ¥${minAmount}`
+                : `单笔最低充值 ¥${minAmount}`;
+              else if (num > effectiveMax) msg = locale === 'en'
+                ? `Maximum per transaction: ¥${effectiveMax}`
+                : `单笔最高充值 ¥${effectiveMax}`;
+            }
+            return <div className={['text-xs', dark ? 'text-amber-300' : 'text-amber-700'].join(' ')}>{msg}</div>;
+          })()}
+        </>
       )}
-
-      {/* 实付人民币 */}
-      <div>
-        <label className={['mb-2 block text-sm font-medium', dark ? 'text-slate-200' : 'text-slate-700'].join(' ')}>
-          {locale === 'en' ? 'Amount to Pay (CNY)' : '实付金额（人民币）'}
-        </label>
-        <div className="relative">
-          <span className={prefixClass}>¥</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={cnyText}
-            onChange={(e) => handleCnyChange(e.target.value)}
-            placeholder="0.00"
-            className={inputClass}
-          />
-        </div>
-      </div>
-
-      {cnyText !== '' && !isValid && (() => {
-        const num = parseFloat(cnyText);
-        let msg = locale === 'en'
-          ? 'Amount must be within range and support up to 2 decimal places'
-          : '金额需在范围内，且最多支持 2 位小数（精确到分）';
-        if (!isNaN(num)) {
-          if (num < minAmount) msg = locale === 'en'
-            ? `Minimum per transaction: ¥${minAmount}`
-            : `单笔最低充值 ¥${minAmount}`;
-          else if (num > effectiveMax) msg = locale === 'en'
-            ? `Maximum per transaction: ¥${effectiveMax}`
-            : `单笔最高充值 ¥${effectiveMax}`;
-        }
-        return <div className={['text-xs', dark ? 'text-amber-300' : 'text-amber-700'].join(' ')}>{msg}</div>;
-      })()}
 
       {enabledPaymentTypes.length > 1 && (
         <div>
@@ -345,12 +366,12 @@ export default function PaymentForm({
       <button
         type="submit"
         disabled={!isValid || loading || pendingBlocked}
-        className={`w-full rounded-lg py-3 text-center font-medium text-white transition-colors ${
+        className={`w-full rounded-lg py-3 text-center font-medium transition-colors ${
           isValid && !loading && !pendingBlocked
-            ? getPaymentMeta(effectivePaymentType).buttonClass
+            ? `text-white ${getPaymentMeta(effectivePaymentType).buttonClass}`
             : dark
-              ? 'cursor-not-allowed bg-slate-700 text-slate-300'
-              : 'cursor-not-allowed bg-gray-300'
+              ? 'cursor-not-allowed bg-slate-700 text-slate-400'
+              : 'cursor-not-allowed bg-gray-300 text-gray-500'
         }`}
       >
         {loading
@@ -358,9 +379,15 @@ export default function PaymentForm({
           : pendingBlocked
             ? locale === 'en' ? 'Too many pending orders' : '待支付订单过多'
             : isValid
-              ? locale === 'en'
-                ? `Pay Now ¥${cnyAmount.toFixed(2)} → $${parseFloat(creditText).toFixed(2)} USD`
-                : `立即支付 ¥${cnyAmount.toFixed(2)} → 到账 $${parseFloat(creditText).toFixed(2)} USD`
+              ? (() => {
+                  const creditUsd = fixedAmount
+                    ? ((fixedAmount / usdExchangeRate) * balanceRatio)
+                    : parseFloat(creditText);
+                  const creditStr = isNaN(creditUsd) ? '—' : creditUsd.toFixed(2);
+                  return locale === 'en'
+                    ? `Pay Now ¥${cnyAmount.toFixed(2)} → $${creditStr} USD`
+                    : `立即支付 ¥${cnyAmount.toFixed(2)} → 到账 $${creditStr} USD`;
+                })()
               : locale === 'en' ? 'Pay Now' : '立即支付'}
       </button>
     </form>

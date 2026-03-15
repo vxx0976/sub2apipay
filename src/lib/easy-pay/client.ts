@@ -8,6 +8,7 @@ export interface CreatePaymentOptions {
   paymentType: string;
   clientIp: string;
   productName: string;
+  returnUrl?: string;
 }
 
 function normalizeCidList(cid?: string): string | undefined {
@@ -56,7 +57,7 @@ export async function createPayment(opts: CreatePaymentOptions): Promise<EasyPay
     type: opts.paymentType,
     out_trade_no: opts.outTradeNo,
     notify_url: env.EASY_PAY_NOTIFY_URL,
-    return_url: env.EASY_PAY_RETURN_URL,
+    return_url: opts.returnUrl || env.EASY_PAY_RETURN_URL,
     name: opts.productName,
     money: opts.amount,
     clientip: opts.clientIp,
@@ -88,8 +89,17 @@ export async function createPayment(opts: CreatePaymentOptions): Promise<EasyPay
 
 export async function queryOrder(outTradeNo: string): Promise<EasyPayQueryResponse> {
   const env = assertEasyPayEnv(getEnv());
-  const url = `${env.EASY_PAY_API_BASE}/api.php?act=order&pid=${env.EASY_PAY_PID}&key=${env.EASY_PAY_PKEY}&out_trade_no=${outTradeNo}`;
-  const response = await fetch(url, {
+  // 使用 POST 避免密钥暴露在 URL 中（URL 会被记录到服务器/CDN 日志）
+  const params = new URLSearchParams({
+    act: 'order',
+    pid: env.EASY_PAY_PID,
+    key: env.EASY_PAY_PKEY,
+    out_trade_no: outTradeNo,
+  });
+  const response = await fetch(`${env.EASY_PAY_API_BASE}/api.php`, {
+    method: 'POST',
+    body: params,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     signal: AbortSignal.timeout(10_000),
   });
   const data = (await response.json()) as EasyPayQueryResponse;

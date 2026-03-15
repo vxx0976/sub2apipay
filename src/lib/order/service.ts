@@ -5,14 +5,25 @@ import { generateRechargeCode } from './code-gen';
 import { getMethodDailyLimit } from './limits';
 import { initPaymentProviders, paymentRegistry } from '@/lib/payment';
 import type { PaymentType, PaymentNotification } from '@/lib/payment';
-import { getUser, createAndRedeem, subtractBalance, addBalance } from '@/lib/sub2api/client';
+import {
+  getUser,
+  createAndRedeem,
+  subtractBalance,
+  addBalance,
+  getGroup,
+  getUserSubscriptions,
+} from '@/lib/sub2api/client';
+import { computeValidityDays, type ValidityUnit } from '@/lib/subscription-utils';
 import { Prisma } from '@prisma/client';
 import { deriveOrderState, isRefundStatus } from './status';
 import { pickLocaleText, type Locale } from '@/lib/locale';
 import { getBizDayStartUTC } from '@/lib/time/biz-day';
 import { buildOrderResultUrl, createOrderStatusAccessToken } from '@/lib/order/status-access';
+import { getSystemConfig, getSystemConfigs } from '@/lib/system-config';
 
 const MAX_PENDING_ORDERS = 3;
+/** Decimal(10,2) 允许的最大金额 */
+export const MAX_AMOUNT = 99999999.99;
 
 function message(locale: Locale, zh: string, en: string): string {
   return pickLocaleText(locale, zh, en);
@@ -28,6 +39,9 @@ export interface CreateOrderInput {
   srcUrl?: string;
   resellerSellingPrice?: number; // CNY per 1 USD (merchant selling price); when set: creditUsd = amount / sellingPrice
   locale?: Locale;
+  // 订阅订单专用
+  orderType?: 'balance' | 'subscription';
+  planId?: string;
 }
 
 export interface CreateOrderResult {
@@ -50,90 +64,166 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
   const env = getEnv();
   const locale = input.locale ?? 'zh';
   const todayStart = getBizDayStartUTC();
+  const orderType = input.orderType ?? 'balance';
+
+  // ── 订阅订单前置校验 ──
+  let subscriptionPlan: {
+    id: string;
+    groupId: number | null;
+    price: Prisma.Decimal;
+    validityDays: number;
+    validityUnit: string;
+    name: string;
+    productName: string | null;
+  } | null = null;
+  let subscriptionGroupName = '';
+
+  // R6: 余额充值禁用检查
+  if (orderType === 'balance') {
+    const balanceDisabled = await getSystemConfig('BALANCE_PAYMENT_DISABLED');
+    if (balanceDisabled === 'true') {
+      throw new OrderError(
+        'BALANCE_PAYMENT_DISABLED',
+        message(locale, '余额充值已被管理员关闭', 'Balance recharge has been disabled by the administrator'),
+        403,
+      );
+    }
+  }
+
+  if (orderType === 'subscription') {
+    if (!input.planId) {
+      throw new OrderError(
+        'INVALID_INPUT',
+        message(locale, '订阅订单必须指定套餐', 'Subscription order requires a plan'),
+        400,
+      );
+    }
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id: input.planId } });
+    if (!plan || !plan.forSale) {
+      throw new OrderError(
+        'PLAN_NOT_AVAILABLE',
+        message(locale, '该套餐不存在或未上架', 'Plan not found or not for sale'),
+        404,
+      );
+    }
+    // 校验分组绑定有效
+    if (plan.groupId === null) {
+      throw new OrderError(
+        'GROUP_NOT_BOUND',
+        message(locale, '该套餐尚未绑定分组，无法购买', 'Plan is not bound to a group'),
+        400,
+      );
+    }
+    // 校验 Sub2API 分组仍然存在
+    const group = await getGroup(plan.groupId);
+    if (!group || group.status !== 'active') {
+      throw new OrderError(
+        'GROUP_NOT_FOUND',
+        message(locale, '订阅分组已下架，无法购买', 'Subscription group is no longer available'),
+        410,
+      );
+    }
+    // R4: 校验分组必须为订阅类型
+    if (group.subscription_type !== 'subscription') {
+      throw new OrderError(
+        'GROUP_TYPE_MISMATCH',
+        message(locale, '该分组不是订阅类型，无法购买订阅', 'This group is not a subscription type'),
+        400,
+      );
+    }
+    subscriptionGroupName = group?.name || plan.name;
+    subscriptionPlan = plan;
+    // 订阅订单金额使用服务端套餐价格，不信任客户端
+    input.amount = Number(plan.price);
+  }
 
   const user = await getUser(input.userId);
   if (user.status !== 'active') {
     throw new OrderError('USER_INACTIVE', message(locale, '用户账号已被禁用', 'User account is disabled'), 422);
   }
 
-  const pendingCount = await prisma.order.count({
-    where: { userId: input.userId, status: ORDER_STATUS.PENDING },
-  });
-  if (pendingCount >= MAX_PENDING_ORDERS) {
-    throw new OrderError(
-      'TOO_MANY_PENDING',
-      message(
-        locale,
-        `待支付订单过多（最多 ${MAX_PENDING_ORDERS} 笔）`,
-        `Too many pending orders (${MAX_PENDING_ORDERS})`,
-      ),
-      429,
-    );
-  }
+  // 运营方自行承担支付网关手续费，用户始终按原始金额付款
+  const feeRate = 0;
+  const payAmountNum = input.amount;
+  const payAmountStr = input.amount.toFixed(2);
 
-  // 每日累计充值限额校验（0 = 不限制）
-  if (env.MAX_DAILY_RECHARGE_AMOUNT > 0) {
-    const dailyAgg = await prisma.order.aggregate({
-      where: {
-        userId: input.userId,
-        status: { in: [ORDER_STATUS.PAID, ORDER_STATUS.RECHARGING, ORDER_STATUS.COMPLETED] },
-        paidAt: { gte: todayStart },
-      },
-      _sum: { amount: true },
+  const expiresAt = new Date(Date.now() + env.ORDER_TIMEOUT_MINUTES * 60 * 1000);
+
+  // 将限额校验与订单创建放在同一个 serializable 事务中，防止并发突破限额
+  const order = await prisma.$transaction(async (tx) => {
+    // 待支付订单数限制
+    const pendingCount = await tx.order.count({
+      where: { userId: input.userId, status: ORDER_STATUS.PENDING },
     });
-    const alreadyPaid = Number(dailyAgg._sum.amount ?? 0);
-    if (alreadyPaid + input.amount > env.MAX_DAILY_RECHARGE_AMOUNT) {
-      const remaining = Math.max(0, env.MAX_DAILY_RECHARGE_AMOUNT - alreadyPaid);
+    if (pendingCount >= MAX_PENDING_ORDERS) {
       throw new OrderError(
-        'DAILY_LIMIT_EXCEEDED',
+        'TOO_MANY_PENDING',
         message(
           locale,
-          `今日累计充值已达上限，剩余可充值 ${remaining.toFixed(2)} 元`,
-          `Daily recharge limit reached. Remaining amount: ${remaining.toFixed(2)} CNY`,
+          `待支付订单过多（最多 ${MAX_PENDING_ORDERS} 笔）`,
+          `Too many pending orders (${MAX_PENDING_ORDERS})`,
         ),
         429,
       );
     }
-  }
 
-  // 渠道每日全平台限额校验（0 = 不限）
-  const methodDailyLimit = getMethodDailyLimit(input.paymentType);
-  if (methodDailyLimit > 0) {
-    const methodAgg = await prisma.order.aggregate({
-      where: {
-        paymentType: input.paymentType,
-        status: { in: [ORDER_STATUS.PAID, ORDER_STATUS.RECHARGING, ORDER_STATUS.COMPLETED] },
-        paidAt: { gte: todayStart },
-      },
-      _sum: { amount: true },
-    });
-    const methodUsed = Number(methodAgg._sum.amount ?? 0);
-    if (methodUsed + input.amount > methodDailyLimit) {
-      const remaining = Math.max(0, methodDailyLimit - methodUsed);
-      throw new OrderError(
-        'METHOD_DAILY_LIMIT_EXCEEDED',
-        remaining > 0
-          ? message(
-              locale,
-              `${input.paymentType} 今日剩余额度 ${remaining.toFixed(2)} 元，请减少充值金额或使用其他支付方式`,
-              `${input.paymentType} remaining daily quota: ${remaining.toFixed(2)} CNY. Reduce the amount or use another payment method`,
-            )
-          : message(
-              locale,
-              `${input.paymentType} 今日充值额度已满，请使用其他支付方式`,
-              `${input.paymentType} daily quota is full. Please use another payment method`,
-            ),
-        429,
-      );
+    // 每日累计充值限额校验（0 = 不限制）
+    if (env.MAX_DAILY_RECHARGE_AMOUNT > 0) {
+      const dailyAgg = await tx.order.aggregate({
+        where: {
+          userId: input.userId,
+          status: { in: [ORDER_STATUS.PAID, ORDER_STATUS.RECHARGING, ORDER_STATUS.COMPLETED] },
+          paidAt: { gte: todayStart },
+        },
+        _sum: { amount: true },
+      });
+      const alreadyPaid = Number(dailyAgg._sum.amount ?? 0);
+      if (alreadyPaid + input.amount > env.MAX_DAILY_RECHARGE_AMOUNT) {
+        const remaining = Math.max(0, env.MAX_DAILY_RECHARGE_AMOUNT - alreadyPaid);
+        throw new OrderError(
+          'DAILY_LIMIT_EXCEEDED',
+          message(
+            locale,
+            `今日累计充值已达上限，剩余可充值 ${remaining.toFixed(2)} 元`,
+            `Daily recharge limit reached. Remaining amount: ${remaining.toFixed(2)} CNY`,
+          ),
+          429,
+        );
+      }
     }
-  }
 
-  // 运营方自行承担支付网关手续费，用户始终按原始金额付款
-  const feeRate = 0;
-  const payAmount = input.amount;
+    // 渠道每日全平台限额校验（0 = 不限）
+    const methodDailyLimit = getMethodDailyLimit(input.paymentType);
+    if (methodDailyLimit > 0) {
+      const methodAgg = await tx.order.aggregate({
+        where: {
+          paymentType: input.paymentType,
+          status: { in: [ORDER_STATUS.PAID, ORDER_STATUS.RECHARGING, ORDER_STATUS.COMPLETED] },
+          paidAt: { gte: todayStart },
+        },
+        _sum: { amount: true },
+      });
+      const methodUsed = Number(methodAgg._sum.amount ?? 0);
+      if (methodUsed + input.amount > methodDailyLimit) {
+        const remaining = Math.max(0, methodDailyLimit - methodUsed);
+        throw new OrderError(
+          'METHOD_DAILY_LIMIT_EXCEEDED',
+          remaining > 0
+            ? message(
+                locale,
+                `${input.paymentType} 今日剩余额度 ${remaining.toFixed(2)} 元，请减少充值金额或使用其他支付方式`,
+                `${input.paymentType} remaining daily quota: ${remaining.toFixed(2)} CNY. Reduce the amount or use another payment method`,
+              )
+            : message(
+                locale,
+                `${input.paymentType} 今日充值额度已满，请使用其他支付方式`,
+                `${input.paymentType} daily quota is full. Please use another payment method`,
+              ),
+          429,
+        );
+      }
+    }
 
-  const expiresAt = new Date(Date.now() + env.ORDER_TIMEOUT_MINUTES * 60 * 1000);
-  const order = await prisma.$transaction(async (tx) => {
     const created = await tx.order.create({
       data: {
         userId: input.userId,
@@ -141,8 +231,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         userName: user.username,
         userNotes: user.notes || null,
         amount: new Prisma.Decimal(input.amount.toFixed(2)),
-        payAmount: new Prisma.Decimal(payAmount.toFixed(2)),
-        feeRate: feeRate > 0 ? new Prisma.Decimal(feeRate.toFixed(2)) : null,
+        payAmount: new Prisma.Decimal(payAmountStr),
+        feeRate: feeRate > 0 ? new Prisma.Decimal(feeRate.toFixed(4)) : null,
         rechargeCode: '',
         status: 'PENDING',
         paymentType: input.paymentType,
@@ -152,6 +242,12 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         srcUrl: input.srcUrl || null,
         priceMultiplier: input.resellerSellingPrice
           ? new Prisma.Decimal(input.resellerSellingPrice.toFixed(4))
+          : null,
+        orderType,
+        planId: subscriptionPlan?.id ?? null,
+        subscriptionGroupId: subscriptionPlan?.groupId ?? null,
+        subscriptionDays: subscriptionPlan
+          ? computeValidityDays(subscriptionPlan.validityDays, subscriptionPlan.validityUnit as ValidityUnit)
           : null,
       },
     });
@@ -169,8 +265,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     initPaymentProviders();
     const provider = paymentRegistry.getProvider(input.paymentType);
 
-    const statusAccessToken = createOrderStatusAccessToken(order.id);
-    const orderResultUrl = buildOrderResultUrl(env.NEXT_PUBLIC_APP_URL, order.id);
+    const statusAccessToken = createOrderStatusAccessToken(order.id, input.userId);
+    const orderResultUrl = buildOrderResultUrl(env.NEXT_PUBLIC_APP_URL, order.id, input.userId);
 
     // 只有 easypay 从外部传入 notifyUrl，return_url 统一回到带访问令牌的结果页
     let notifyUrl: string | undefined;
@@ -180,14 +276,32 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       returnUrl = orderResultUrl;
     }
 
-    const creditUsdForSubject = input.resellerSellingPrice && input.resellerSellingPrice > 0
-      ? Math.round((input.amount / input.resellerSellingPrice) * 100) / 100
-      : Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+    // 构建支付商品名称
+    let paymentSubject: string;
+    if (subscriptionPlan) {
+      // 订阅订单优先使用套餐自定义商品名称
+      paymentSubject = subscriptionPlan.productName || `Sub2API 订阅 ${subscriptionGroupName || subscriptionPlan.name}`;
+    } else {
+      // 余额订单：计算到账 USD 用于显示
+      const creditUsdForSubject = input.resellerSellingPrice && input.resellerSellingPrice > 0
+        ? Math.round((input.amount / input.resellerSellingPrice) * 100) / 100
+        : Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+      // 支持前缀/后缀配置
+      const nameConfigs = await getSystemConfigs(['PRODUCT_NAME_PREFIX', 'PRODUCT_NAME_SUFFIX']);
+      const prefix = nameConfigs['PRODUCT_NAME_PREFIX']?.trim();
+      const suffix = nameConfigs['PRODUCT_NAME_SUFFIX']?.trim();
+      if (prefix || suffix) {
+        paymentSubject = `${prefix || ''} $${creditUsdForSubject.toFixed(2)} USD ${suffix || ''}`.trim();
+      } else {
+        paymentSubject = `${env.PRODUCT_NAME} $${creditUsdForSubject.toFixed(2)} USD`;
+      }
+    }
+
     const paymentResult = await provider.createPayment({
       orderId: order.id,
-      amount: payAmount,
+      amount: payAmountNum,
       paymentType: input.paymentType,
-      subject: `${env.PRODUCT_NAME} $${creditUsdForSubject.toFixed(2)} USD`,
+      subject: paymentSubject,
       notifyUrl,
       returnUrl,
       clientIp: input.clientIp,
@@ -207,7 +321,17 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       data: {
         orderId: order.id,
         action: 'ORDER_CREATED',
-        detail: JSON.stringify({ userId: input.userId, amount: input.amount, paymentType: input.paymentType }),
+        detail: JSON.stringify({
+          userId: input.userId,
+          amount: input.amount,
+          paymentType: input.paymentType,
+          orderType,
+          ...(subscriptionPlan && {
+            planId: subscriptionPlan.id,
+            planName: subscriptionPlan.name,
+            groupId: subscriptionPlan.groupId,
+          }),
+        }),
         operator: `user:${input.userId}`,
       },
     });
@@ -215,7 +339,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     return {
       orderId: order.id,
       amount: input.amount,
-      payAmount,
+      payAmount: payAmountNum,
       feeRate,
       status: ORDER_STATUS.PENDING,
       paymentType: input.paymentType,
@@ -460,10 +584,10 @@ export async function confirmPayment(input: {
     // FAILED 状态 — 之前充值失败，利用重试通知自动重试充值
     if (current.status === ORDER_STATUS.FAILED) {
       try {
-        await executeRecharge(order.id);
+        await executeFulfillment(order.id);
         return true;
       } catch (err) {
-        console.error('Recharge retry failed for order:', order.id, err);
+        console.error('Fulfillment retry failed for order:', order.id, err);
         return false; // 让支付平台继续重试
       }
     }
@@ -492,9 +616,9 @@ export async function confirmPayment(input: {
   });
 
   try {
-    await executeRecharge(order.id);
+    await executeFulfillment(order.id);
   } catch (err) {
-    console.error('Recharge failed for order:', order.id, err);
+    console.error('Fulfillment failed for order:', order.id, err);
     return false;
   }
 
@@ -517,6 +641,136 @@ export async function handlePaymentNotify(notification: PaymentNotification, pro
     paidAmount: notification.amount,
     providerName,
   });
+}
+
+/**
+ * 统一履约入口 — 根据 orderType 分派到余额充值或订阅分配。
+ */
+export async function executeFulfillment(orderId: string): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { orderType: true },
+  });
+  if (!order) throw new OrderError('NOT_FOUND', 'Order not found', 404);
+
+  if (order.orderType === 'subscription') {
+    await executeSubscriptionFulfillment(orderId);
+  } else {
+    await executeRecharge(orderId);
+  }
+}
+
+/**
+ * 订阅履约 — 支付成功后调用 Sub2API 分配订阅。
+ */
+export async function executeSubscriptionFulfillment(orderId: string): Promise<void> {
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order) throw new OrderError('NOT_FOUND', 'Order not found', 404);
+  if (order.status === ORDER_STATUS.COMPLETED) return;
+  if (isRefundStatus(order.status)) {
+    throw new OrderError('INVALID_STATUS', 'Refund-related order cannot fulfill', 400);
+  }
+  if (order.status !== ORDER_STATUS.PAID && order.status !== ORDER_STATUS.FAILED) {
+    throw new OrderError('INVALID_STATUS', `Order cannot fulfill in status ${order.status}`, 400);
+  }
+  if (!order.subscriptionGroupId || !order.subscriptionDays) {
+    throw new OrderError('INVALID_STATUS', 'Missing subscription info on order', 400);
+  }
+
+  // CAS 锁
+  const lockResult = await prisma.order.updateMany({
+    where: { id: orderId, status: { in: [ORDER_STATUS.PAID, ORDER_STATUS.FAILED] } },
+    data: { status: ORDER_STATUS.RECHARGING },
+  });
+  if (lockResult.count === 0) return;
+
+  try {
+    // 校验分组是否仍然存在
+    const group = await getGroup(order.subscriptionGroupId);
+    if (!group || group.status !== 'active') {
+      throw new Error(`Subscription group ${order.subscriptionGroupId} no longer exists or inactive`);
+    }
+
+    // 检测是否续费：查找同分组的活跃订阅，决定天数计算起点
+    let validityDays = order.subscriptionDays;
+    let fulfillMethod: 'renew' | 'new' = 'new';
+    let renewedSubscriptionId: number | undefined;
+
+    const userSubs = await getUserSubscriptions(order.userId);
+    const activeSub = userSubs.find((s) => s.group_id === order.subscriptionGroupId && s.status === 'active');
+
+    if (activeSub) {
+      // 续费：从到期日往后推算天数
+      const plan = await prisma.subscriptionPlan.findFirst({
+        where: { groupId: order.subscriptionGroupId },
+        select: { validityDays: true, validityUnit: true },
+      });
+      if (plan) {
+        validityDays = computeValidityDays(
+          plan.validityDays,
+          plan.validityUnit as ValidityUnit,
+          new Date(activeSub.expires_at),
+        );
+      }
+      fulfillMethod = 'renew';
+      renewedSubscriptionId = activeSub.id;
+    }
+
+    await createAndRedeem(
+      order.rechargeCode,
+      Number(order.amount),
+      order.userId,
+      `sub2apipay subscription order:${orderId}`,
+      {
+        type: 'subscription',
+        groupId: order.subscriptionGroupId,
+        validityDays,
+      },
+    );
+
+    await prisma.order.updateMany({
+      where: { id: orderId, status: ORDER_STATUS.RECHARGING },
+      data: { status: ORDER_STATUS.COMPLETED, completedAt: new Date() },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        orderId,
+        action: 'SUBSCRIPTION_SUCCESS',
+        detail: JSON.stringify({
+          groupId: order.subscriptionGroupId,
+          days: order.subscriptionDays,
+          amount: Number(order.amount),
+          method: fulfillMethod,
+          ...(renewedSubscriptionId && { renewedSubscriptionId }),
+        }),
+        operator: 'system',
+      },
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const isGroupGone = reason.includes('no longer exists');
+
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: ORDER_STATUS.FAILED,
+        failedAt: new Date(),
+        failedReason: isGroupGone ? `SUBSCRIPTION_GROUP_GONE: ${reason}` : reason,
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        orderId,
+        action: 'SUBSCRIPTION_FAILED',
+        detail: reason,
+        operator: 'system',
+      },
+    });
+
+    throw error;
+  }
 }
 
 export async function executeRecharge(orderId: string): Promise<void> {
@@ -713,7 +967,7 @@ export async function retryRecharge(orderId: string, locale: Locale = 'zh'): Pro
     },
   });
 
-  await executeRecharge(orderId);
+  await executeFulfillment(orderId);
 }
 
 export interface RefundInput {
@@ -809,7 +1063,10 @@ export async function processRefund(input: RefundInput): Promise<RefundResult> {
             `sub2apipay:refund-rollback:${order.id}`,
           );
         } catch (rollbackError) {
-          // 余额恢复也失败，记录审计日志，需人工介入
+          // 余额恢复也失败，记录审计日志并标记需要补偿，便于定时任务或管理员重试
+          console.error(
+            `[CRITICAL] Refund rollback failed for order ${input.orderId}: balance deducted ${rechargeAmount} but gateway refund and balance restoration both failed. Manual intervention required.`,
+          );
           await prisma.auditLog.create({
             data: {
               orderId: input.orderId,
@@ -818,6 +1075,7 @@ export async function processRefund(input: RefundInput): Promise<RefundResult> {
                 gatewayError: gatewayError instanceof Error ? gatewayError.message : String(gatewayError),
                 rollbackError: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
                 rechargeAmount,
+                needsBalanceCompensation: true,
               }),
               operator: 'admin',
             },

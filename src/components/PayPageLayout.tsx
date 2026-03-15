@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Locale } from '@/lib/locale';
 
 interface PayPageLayoutProps {
   isDark: boolean;
@@ -8,6 +9,7 @@ interface PayPageLayoutProps {
   subtitle: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  locale?: Locale;
 }
 
 export default function PayPageLayout({
