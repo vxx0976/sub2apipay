@@ -48,13 +48,6 @@ model Order {
   subscriptionGroupId Int?               @map("subscription_group_id")
   subscriptionDays    Int?               @map("subscription_days")
 
-  // ── 订单类型 & 订阅相关 ──
-  orderType           String             @default("balance") @map("order_type")
-  planId              String?            @map("plan_id")
-  plan                SubscriptionPlan?  @relation(fields: [planId], references: [id])
-  subscriptionGroupId Int?               @map("subscription_group_id")
-  subscriptionDays    Int?               @map("subscription_days")
-
   auditLogs     AuditLog[]
 
   @@index([userId])
