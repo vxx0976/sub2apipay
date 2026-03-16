@@ -42,3 +42,6 @@ next-env.d.ts
 
 # third-party source code (local reference only)
 /third-party
+
+# Claude Code project instructions (contains sensitive deployment info)
+CLAUDE.md

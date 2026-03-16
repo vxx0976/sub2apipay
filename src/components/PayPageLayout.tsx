@@ -20,11 +20,13 @@ export default function PayPageLayout({
   subtitle,
   actions,
   children,
+  locale = 'zh',
 }: PayPageLayoutProps) {
   const maxWidthClass = maxWidth === 'sm' ? 'max-w-lg' : maxWidth === 'lg' ? 'max-w-6xl' : '';
 
   return (
     <div
+      data-theme={isDark ? 'dark' : 'light'}
       className={[
         'relative w-full overflow-hidden',
         isEmbedded ? 'min-h-screen p-2' : 'min-h-screen p-3 sm:p-4',
@@ -60,6 +62,14 @@ export default function PayPageLayout({
       >
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
+            <div
+              className={[
+                'mb-2 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium',
+                isDark ? 'bg-indigo-500/20 text-indigo-200' : 'bg-indigo-50 text-indigo-700',
+              ].join(' ')}
+            >
+              {locale === 'en' ? 'Sub2API Secure Pay' : 'Sub2API 安全支付'}
+            </div>
             <h1
               className={['text-2xl font-semibold tracking-tight', isDark ? 'text-slate-100' : 'text-slate-900'].join(
                 ' ',

@@ -29,11 +29,12 @@ export class EasyPayProvider implements PaymentProvider {
       clientIp: request.clientIp || '127.0.0.1',
       productName: request.subject,
       returnUrl: request.returnUrl,
+      isMobile: request.isMobile,
     });
 
     return {
       tradeNo: result.trade_no,
-      payUrl: result.payurl,
+      payUrl: (request.isMobile && result.payurl2) || result.payurl,
       qrCode: result.qrcode,
     };
   }

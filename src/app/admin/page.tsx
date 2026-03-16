@@ -134,6 +134,7 @@ function DashboardContent() {
       maxWidth="full"
       title={text.title}
       subtitle={text.subtitle}
+      locale={locale}
       actions={
         <>
           {DAYS_OPTIONS.map((d) => (
