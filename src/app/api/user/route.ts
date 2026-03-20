@@ -60,12 +60,8 @@ export async function GET(request: NextRequest) {
     ]);
     const balanceDisabled = balanceDisabledVal === 'true';
 
-    // 对商户子用户，使用卖价直接换算：effectiveRatio = USD_EXCHANGE_RATE / selling_price
-    // 这样 creditUsd = amount * effectiveRatio / USD_EXCHANGE_RATE = amount / selling_price
-    const effectiveBalanceRatio =
-      tokenUser._x_sp && tokenUser._x_sp > 0
-        ? env.USD_EXCHANGE_RATE / tokenUser._x_sp
-        : env.BALANCE_RATIO;
+    // 统一使用平台定价，不再由商户自定义
+    const effectiveBalanceRatio = env.BALANCE_RATIO;
 
     // 收集 sublabel 覆盖
     const sublabelOverrides: Record<string, string> = {};
