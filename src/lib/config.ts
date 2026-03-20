@@ -88,8 +88,8 @@ const envSchema = z.object({
   PRODUCT_NAME: z.string().default('Sub2API Balance Recharge'),
 
   // ── 换算比例 ──
-  USD_EXCHANGE_RATE: z.coerce.number().positive().default(6.9), // CNY per 1 USD
-  BALANCE_RATIO: z.coerce.number().positive().default(10), // 平台余额倍率（1 USD 实付 → BALANCE_RATIO USD 余额）
+  // 卖价兜底：sub2apipay 优先读取 sub2api 平台设置的 _x_sp，此值仅在 _x_sp 未配置时使用
+  SELLING_PRICE: z.coerce.number().positive().default(7.2), // CNY per 1 USD
 
   ADMIN_TOKEN: z.string().min(1),
 

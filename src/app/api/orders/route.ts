@@ -42,9 +42,11 @@ export async function POST(request: NextRequest) {
 
     // 通过 token 解析用户身份
     let userId: number;
+    let sellingPrice: number | undefined;
     try {
       const user = await getCurrentUserByToken(token);
       userId = user.id;
+      if (user._x_sp && user._x_sp > 0) sellingPrice = user._x_sp;
     } catch {
       return NextResponse.json({ error: '无效的 token，请重新登录', code: 'INVALID_TOKEN' }, { status: 401 });
     }
@@ -69,6 +71,7 @@ export async function POST(request: NextRequest) {
 
     const result = await createOrder({
       userId,
+      sellingPrice,
       amount,
       paymentType: payment_type,
       clientIp,

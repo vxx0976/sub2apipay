@@ -60,8 +60,8 @@ export async function GET(request: NextRequest) {
     ]);
     const balanceDisabled = balanceDisabledVal === 'true';
 
-    // 统一使用平台定价，不再由商户自定义
-    const effectiveBalanceRatio = env.BALANCE_RATIO;
+    // 使用 sub2api 平台卖价（_x_sp），兜底使用环境变量 SELLING_PRICE
+    const sellingPrice = (tokenUser._x_sp && tokenUser._x_sp > 0) ? tokenUser._x_sp : env.SELLING_PRICE;
 
     // 收集 sublabel 覆盖
     const sublabelOverrides: Record<string, string> = {};
@@ -107,8 +107,8 @@ export async function GET(request: NextRequest) {
           enabledTypes.includes('stripe') && env.STRIPE_PUBLISHABLE_KEY ? env.STRIPE_PUBLISHABLE_KEY : null,
         balanceDisabled,
         sublabelOverrides: Object.keys(sublabelOverrides).length > 0 ? sublabelOverrides : null,
-        usdExchangeRate: env.USD_EXCHANGE_RATE,
-        balanceRatio: effectiveBalanceRatio,
+        usdExchangeRate: sellingPrice,
+        balanceRatio: 1,
       },
     });
   } catch (error) {

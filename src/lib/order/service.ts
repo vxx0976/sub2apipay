@@ -34,6 +34,7 @@ export interface CreateOrderInput {
   amount: number;
   paymentType: PaymentType;
   clientIp: string;
+  sellingPrice?: number; // CNY per 1 USD，来自 sub2api 平台卖价 (_x_sp)
   isMobile?: boolean;
   srcHost?: string;
   srcUrl?: string;
@@ -240,6 +241,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         srcHost: input.srcHost || null,
         srcUrl: input.srcUrl || null,
         orderType,
+        // 快照卖价用于兑换结算，优先取 _x_sp，兜底取 env.SELLING_PRICE
+        priceMultiplier: new Prisma.Decimal((input.sellingPrice ?? env.SELLING_PRICE).toFixed(4)),
         planId: subscriptionPlan?.id ?? null,
         subscriptionGroupId: subscriptionPlan?.groupId ?? null,
         subscriptionDays: subscriptionPlan
@@ -278,8 +281,9 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       // 订阅订单优先使用套餐自定义商品名称
       paymentSubject = subscriptionPlan.productName || `Sub2API 订阅 ${subscriptionGroupName || subscriptionPlan.name}`;
     } else {
-      // 余额订单：按平台统一定价计算到账 USD 用于显示
-      const creditUsdForSubject = Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+    // 余额订单：按卖价计算到账 USD（优先用 _x_sp，兜底用 env.SELLING_PRICE）
+      const sp = input.sellingPrice ?? env.SELLING_PRICE;
+      const creditUsdForSubject = Math.round((input.amount / sp) * 100) / 100;
       // 支持前缀/后缀配置
       const nameConfigs = await getSystemConfigs(['PRODUCT_NAME_PREFIX', 'PRODUCT_NAME_SUFFIX']);
       const prefix = nameConfigs['PRODUCT_NAME_PREFIX']?.trim();
@@ -793,8 +797,9 @@ export async function executeRecharge(orderId: string): Promise<void> {
   }
 
   const env = getEnv();
-  // 统一使用平台定价换算：CNY → USD 余额
-  const creditUsd = Math.round((Number(order.amount) * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+  // 用下单时快照的卖价换算，兜底使用 env.SELLING_PRICE
+  const sp = order.priceMultiplier ? Number(order.priceMultiplier) : env.SELLING_PRICE;
+  const creditUsd = Math.round((Number(order.amount) / sp) * 100) / 100;
 
   try {
     await createAndRedeem(
