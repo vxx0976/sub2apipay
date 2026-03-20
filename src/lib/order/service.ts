@@ -37,7 +37,6 @@ export interface CreateOrderInput {
   isMobile?: boolean;
   srcHost?: string;
   srcUrl?: string;
-  resellerSellingPrice?: number; // CNY per 1 USD (merchant selling price); when set: creditUsd = amount / sellingPrice
   locale?: Locale;
   // 订阅订单专用
   orderType?: 'balance' | 'subscription';
@@ -240,9 +239,6 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
         clientIp: input.clientIp,
         srcHost: input.srcHost || null,
         srcUrl: input.srcUrl || null,
-        priceMultiplier: input.resellerSellingPrice
-          ? new Prisma.Decimal(input.resellerSellingPrice.toFixed(4))
-          : null,
         orderType,
         planId: subscriptionPlan?.id ?? null,
         subscriptionGroupId: subscriptionPlan?.groupId ?? null,
@@ -282,10 +278,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       // 订阅订单优先使用套餐自定义商品名称
       paymentSubject = subscriptionPlan.productName || `Sub2API 订阅 ${subscriptionGroupName || subscriptionPlan.name}`;
     } else {
-      // 余额订单：计算到账 USD 用于显示
-      const creditUsdForSubject = input.resellerSellingPrice && input.resellerSellingPrice > 0
-        ? Math.round((input.amount / input.resellerSellingPrice) * 100) / 100
-        : Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+      // 余额订单：按平台统一定价计算到账 USD 用于显示
+      const creditUsdForSubject = Math.round((input.amount * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
       // 支持前缀/后缀配置
       const nameConfigs = await getSystemConfigs(['PRODUCT_NAME_PREFIX', 'PRODUCT_NAME_SUFFIX']);
       const prefix = nameConfigs['PRODUCT_NAME_PREFIX']?.trim();
@@ -799,12 +793,8 @@ export async function executeRecharge(orderId: string): Promise<void> {
   }
 
   const env = getEnv();
-  const orderSellingPrice = order.priceMultiplier ? Number(order.priceMultiplier) : null;
-  // priceMultiplier stores the merchant's selling_price (CNY per 1 USD)
-  // creditUsd = cnyAmount / selling_price; fall back to main platform ratio when not set
-  const creditUsd = orderSellingPrice && orderSellingPrice > 0
-    ? Math.round((Number(order.amount) / orderSellingPrice) * 100) / 100
-    : Math.round((Number(order.amount) * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
+  // 统一使用平台定价换算：CNY → USD 余额
+  const creditUsd = Math.round((Number(order.amount) * env.BALANCE_RATIO / env.USD_EXCHANGE_RATE) * 100) / 100;
 
   try {
     await createAndRedeem(

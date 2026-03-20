@@ -42,13 +42,9 @@ export async function POST(request: NextRequest) {
 
     // 通过 token 解析用户身份
     let userId: number;
-    let resellerSellingPrice: number | undefined;
     try {
       const user = await getCurrentUserByToken(token);
       userId = user.id;
-      if (user._x_sp && user._x_sp > 0) {
-        resellerSellingPrice = user._x_sp;
-      }
     } catch {
       return NextResponse.json({ error: '无效的 token，请重新登录', code: 'INVALID_TOKEN' }, { status: 401 });
     }
@@ -79,7 +75,6 @@ export async function POST(request: NextRequest) {
       isMobile: is_mobile,
       srcHost: src_host,
       srcUrl: src_url,
-      resellerSellingPrice,
       orderType: order_type,
       planId: plan_id,
     });
