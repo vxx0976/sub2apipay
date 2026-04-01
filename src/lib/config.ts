@@ -63,7 +63,7 @@ const envSchema = z.object({
   // 每日每用户最大累计充值额，0 = 不限制
   MAX_DAILY_RECHARGE_AMOUNT: z.string().default('10000').transform(Number).pipe(z.number().min(0)),
   // 每日每用户最大下单次数（防风控），0 = 不限制
-  MAX_DAILY_ORDER_COUNT: z.string().default('0').transform(Number).pipe(z.number().int().min(0)),
+  MAX_DAILY_ORDER_COUNT: z.string().default('3').transform(Number).pipe(z.number().int().min(0)),
 
   // 每日各渠道全平台总限额，可选覆盖（0 = 不限制）。
   // 未设置时由各 PaymentProvider.defaultLimits 提供默认值。
