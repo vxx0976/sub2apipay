@@ -31,6 +31,12 @@ interface PaymentFormProps {
   locale?: Locale;
   /** 固定金额模式：隐藏金额选择，只显示支付方式和提交按钮 */
   fixedAmount?: number;
+  /** 每日下单次数已用完 */
+  dailyOrdersBlocked?: boolean;
+  /** 今日剩余下单次数 */
+  dailyOrdersRemaining?: number;
+  /** 每日最大下单次数 */
+  maxDailyOrderCount?: number;
 }
 
 const QUICK_AMOUNTS_CNY = [10, 30, 50, 100, 200];
@@ -57,6 +63,9 @@ export default function PaymentForm({
   balanceRatio = 10,
   locale = 'zh',
   fixedAmount,
+  dailyOrdersBlocked = false,
+  dailyOrdersRemaining = -1,
+  maxDailyOrderCount = 0,
 }: PaymentFormProps) {
   const [paymentType, setPaymentType] = useState(enabledPaymentTypes[0] || 'alipay');
   const [creditText, setCreditText] = useState('');  // 到账余额 USD
@@ -363,11 +372,37 @@ export default function PaymentForm({
         </div>
       )}
 
+      {dailyOrdersBlocked && (
+        <div
+          className={[
+            'rounded-lg border p-3 text-sm',
+            dark ? 'border-red-700 bg-red-900/30 text-red-300' : 'border-red-200 bg-red-50 text-red-600',
+          ].join(' ')}
+        >
+          {locale === 'en'
+            ? `You have used all recharge attempts today (max ${maxDailyOrderCount}/day). Please try again tomorrow.`
+            : `今日充值次数已用完（每日最多 ${maxDailyOrderCount} 次），请明日再试`}
+        </div>
+      )}
+
+      {!dailyOrdersBlocked && maxDailyOrderCount > 0 && dailyOrdersRemaining > 0 && (
+        <div
+          className={[
+            'rounded-lg border p-3 text-sm',
+            dark ? 'border-slate-700 bg-slate-800/60 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600',
+          ].join(' ')}
+        >
+          {locale === 'en'
+            ? `Daily recharge attempts: ${dailyOrdersRemaining}/${maxDailyOrderCount} remaining. Please pay within 10 minutes after placing an order.`
+            : `今日剩余充值次数：${dailyOrdersRemaining}/${maxDailyOrderCount}，下单后请在10分钟内完成支付`}
+        </div>
+      )}
+
       <button
         type="submit"
-        disabled={!isValid || loading || pendingBlocked}
+        disabled={!isValid || loading || pendingBlocked || dailyOrdersBlocked}
         className={`w-full rounded-lg py-3 text-center font-medium transition-colors ${
-          isValid && !loading && !pendingBlocked
+          isValid && !loading && !pendingBlocked && !dailyOrdersBlocked
             ? `text-white ${getPaymentMeta(effectivePaymentType).buttonClass}`
             : dark
               ? 'cursor-not-allowed bg-slate-700 text-slate-400'
@@ -376,9 +411,11 @@ export default function PaymentForm({
       >
         {loading
           ? locale === 'en' ? 'Processing...' : '处理中...'
-          : pendingBlocked
-            ? locale === 'en' ? 'Too many pending orders' : '待支付订单过多'
-            : isValid
+          : dailyOrdersBlocked
+            ? locale === 'en' ? 'Daily limit reached' : '今日次数已用完'
+            : pendingBlocked
+              ? locale === 'en' ? 'Too many pending orders' : '待支付订单过多'
+              : isValid
               ? (() => {
                   const creditUsd = fixedAmount
                     ? ((fixedAmount / usdExchangeRate) * balanceRatio)

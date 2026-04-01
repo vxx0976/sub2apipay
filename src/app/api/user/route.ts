@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUser, getCurrentUserByToken } from '@/lib/sub2api/client';
 import { getEnv } from '@/lib/config';
 import { queryMethodLimits } from '@/lib/order/limits';
+import { getDailyOrdersRemaining } from '@/lib/order/service';
 import { initPaymentProviders, paymentRegistry } from '@/lib/payment';
 import { getPaymentDisplayInfo } from '@/lib/pay-utils';
 import { resolveLocale } from '@/lib/locale';
@@ -53,10 +54,11 @@ export async function GET(request: NextRequest) {
             if (type === 'stripe') return allowedCategories.includes('stripe');
             return true;
           });
-    const [user, methodLimits, balanceDisabledVal] = await Promise.all([
+    const [user, methodLimits, balanceDisabledVal, dailyOrdersRemaining] = await Promise.all([
       getUser(userId),
       queryMethodLimits(enabledTypes),
       getSystemConfig('BALANCE_PAYMENT_DISABLED'),
+      getDailyOrdersRemaining(userId),
     ]);
     const balanceDisabled = balanceDisabledVal === 'true';
 
@@ -106,6 +108,8 @@ export async function GET(request: NextRequest) {
         stripePublishableKey:
           enabledTypes.includes('stripe') && env.STRIPE_PUBLISHABLE_KEY ? env.STRIPE_PUBLISHABLE_KEY : null,
         balanceDisabled,
+        dailyOrdersRemaining,
+        maxDailyOrderCount: env.MAX_DAILY_ORDER_COUNT,
         sublabelOverrides: Object.keys(sublabelOverrides).length > 0 ? sublabelOverrides : null,
         usdExchangeRate: sellingPrice,
         balanceRatio: 1,

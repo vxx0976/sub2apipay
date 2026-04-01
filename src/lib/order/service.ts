@@ -29,6 +29,20 @@ function message(locale: Locale, zh: string, en: string): string {
   return pickLocaleText(locale, zh, en);
 }
 
+/**
+ * 查询用户今日剩余下单次数。
+ * 返回 -1 表示不限制。
+ */
+export async function getDailyOrdersRemaining(userId: number): Promise<number> {
+  const env = getEnv();
+  if (env.MAX_DAILY_ORDER_COUNT <= 0) return -1;
+  const todayStart = getBizDayStartUTC();
+  const count = await prisma.order.count({
+    where: { userId, createdAt: { gte: todayStart } },
+  });
+  return Math.max(0, env.MAX_DAILY_ORDER_COUNT - count);
+}
+
 export interface CreateOrderInput {
   userId: number;
   amount: number;
@@ -58,6 +72,7 @@ export interface CreateOrderResult {
   clientSecret?: string | null;
   expiresAt: Date;
   statusAccessToken: string;
+  dailyOrdersRemaining: number;
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<CreateOrderResult> {
@@ -167,6 +182,28 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       );
     }
 
+    // 每日下单次数限制（防风控，统计当日所有创建的订单，不区分状态）
+    let dailyOrderCount = 0;
+    if (env.MAX_DAILY_ORDER_COUNT > 0) {
+      dailyOrderCount = await tx.order.count({
+        where: {
+          userId: input.userId,
+          createdAt: { gte: todayStart },
+        },
+      });
+      if (dailyOrderCount >= env.MAX_DAILY_ORDER_COUNT) {
+        throw new OrderError(
+          'DAILY_ORDER_COUNT_EXCEEDED',
+          message(
+            locale,
+            `今日下单次数已用完（每日最多 ${env.MAX_DAILY_ORDER_COUNT} 次），请明日再试`,
+            `Daily order limit reached (max ${env.MAX_DAILY_ORDER_COUNT} per day). Please try again tomorrow`,
+          ),
+          429,
+        );
+      }
+    }
+
     // 每日累计充值限额校验（0 = 不限制）
     if (env.MAX_DAILY_RECHARGE_AMOUNT > 0) {
       const dailyAgg = await tx.order.aggregate({
@@ -257,7 +294,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       data: { rechargeCode },
     });
 
-    return { ...created, rechargeCode };
+    return { ...created, rechargeCode, _dailyOrderCount: dailyOrderCount };
   });
 
   try {
@@ -334,6 +371,11 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       },
     });
 
+    // 计算今日剩余下单次数（事务内已统计 _dailyOrderCount，加上刚创建的这笔）
+    const dailyOrdersRemaining = env.MAX_DAILY_ORDER_COUNT > 0
+      ? Math.max(0, env.MAX_DAILY_ORDER_COUNT - order._dailyOrderCount - 1)
+      : -1; // -1 表示不限制
+
     return {
       orderId: order.id,
       amount: input.amount,
@@ -348,6 +390,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       clientSecret: paymentResult.clientSecret,
       expiresAt,
       statusAccessToken,
+      dailyOrdersRemaining,
     };
   } catch (error) {
     await prisma.order.delete({ where: { id: order.id } });

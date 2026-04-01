@@ -94,6 +94,9 @@ function PayContent() {
   });
   const [userNotFound, setUserNotFound] = useState(false);
   const [helpImageOpen, setHelpImageOpen] = useState(false);
+  const [dailyOrdersRemaining, setDailyOrdersRemaining] = useState<number>(-1); // -1 = 不限制
+  const [maxDailyOrderCount, setMaxDailyOrderCount] = useState(0);
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
   const hasToken = token.length > 0;
   const isEmbedded = uiMode === 'embedded' && isIframeContext;
@@ -135,6 +138,7 @@ function PayContent() {
 
   const MAX_PENDING = 3;
   const pendingBlocked = pendingCount >= MAX_PENDING;
+  const dailyOrdersBlocked = dailyOrdersRemaining === 0;
 
   // R6: 余额充值是否被禁用
   const balanceDisabled = config.balanceDisabled === true;
@@ -217,6 +221,12 @@ function PayContent() {
             balanceRatio: cfgData.config.balanceRatio,
             balanceDisabled: cfgData.config.balanceDisabled ?? false,
           });
+          if (cfgData.config.dailyOrdersRemaining !== undefined) {
+            setDailyOrdersRemaining(cfgData.config.dailyOrdersRemaining);
+          }
+          if (cfgData.config.maxDailyOrderCount !== undefined) {
+            setMaxDailyOrderCount(cfgData.config.maxDailyOrderCount);
+          }
           if (cfgData.config.sublabelOverrides) {
             applySublabelOverrides(cfgData.config.sublabelOverrides);
           }
@@ -401,12 +411,21 @@ function PayContent() {
           USER_NOT_FOUND: pickLocaleText(locale, '用户不存在', 'User not found'),
           DAILY_LIMIT_EXCEEDED: data.error,
           METHOD_DAILY_LIMIT_EXCEEDED: data.error,
+          DAILY_ORDER_COUNT_EXCEEDED: data.error,
           PAYMENT_GATEWAY_ERROR: data.error,
         };
+        if (data.code === 'DAILY_ORDER_COUNT_EXCEEDED') {
+          setDailyOrdersRemaining(0);
+        }
         setError(
           codeMessages[data.code] || data.error || pickLocaleText(locale, '创建订单失败', 'Failed to create order'),
         );
         return;
+      }
+
+      // 更新剩余下单次数
+      if (typeof data.dailyOrdersRemaining === 'number') {
+        setDailyOrdersRemaining(data.dailyOrdersRemaining);
       }
 
       setOrderResult({
@@ -453,8 +472,15 @@ function PayContent() {
 
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === 'DAILY_ORDER_COUNT_EXCEEDED') {
+          setDailyOrdersRemaining(0);
+        }
         setError(data.error || pickLocaleText(locale, '创建订阅订单失败', 'Failed to create subscription order'));
         return;
+      }
+
+      if (typeof data.dailyOrdersRemaining === 'number') {
+        setDailyOrdersRemaining(data.dailyOrdersRemaining);
       }
 
       setOrderResult({
@@ -483,7 +509,7 @@ function PayContent() {
     if (isMobile) setActiveMobileTab('orders');
   };
 
-  const handleBack = () => {
+  const doBack = () => {
     setStep('form');
     setOrderResult(null);
     setFinalOrderState(null);
@@ -491,6 +517,16 @@ function PayContent() {
     setSubscriptionError('');
     setSelectedPlan(null);
     setShowTopUpForm(false);
+    setShowCloseConfirm(false);
+  };
+
+  const handleBack = () => {
+    // 从支付/结果页返回时，弹窗提示剩余次数
+    if ((step === 'paying' || step === 'result') && maxDailyOrderCount > 0 && dailyOrdersRemaining >= 0) {
+      setShowCloseConfirm(true);
+      return;
+    }
+    doBack();
   };
 
   // ── 渲染 ──
@@ -790,6 +826,9 @@ function PayContent() {
                         dark={isDark}
                         pendingBlocked={pendingBlocked}
                         pendingCount={pendingCount}
+                        dailyOrdersBlocked={dailyOrdersBlocked}
+                        dailyOrdersRemaining={dailyOrdersRemaining}
+                        maxDailyOrderCount={maxDailyOrderCount}
                         locale={locale}
                       />
                     )}
@@ -872,6 +911,9 @@ function PayContent() {
                 dark={isDark}
                 pendingBlocked={pendingBlocked}
                 pendingCount={pendingCount}
+                dailyOrdersBlocked={dailyOrdersBlocked}
+                dailyOrdersRemaining={dailyOrdersRemaining}
+                maxDailyOrderCount={maxDailyOrderCount}
                 usdExchangeRate={config.usdExchangeRate}
                 balanceRatio={config.balanceRatio}
                 locale={locale}
@@ -914,6 +956,9 @@ function PayContent() {
                     dark={isDark}
                     pendingBlocked={pendingBlocked}
                     pendingCount={pendingCount}
+                    dailyOrdersBlocked={dailyOrdersBlocked}
+                    dailyOrdersRemaining={dailyOrdersRemaining}
+                    maxDailyOrderCount={maxDailyOrderCount}
                     usdExchangeRate={config.usdExchangeRate}
                     balanceRatio={config.balanceRatio}
                     locale={locale}
@@ -946,6 +991,9 @@ function PayContent() {
                       dark={isDark}
                       pendingBlocked={pendingBlocked}
                       pendingCount={pendingCount}
+                      dailyOrdersBlocked={dailyOrdersBlocked}
+                      dailyOrdersRemaining={dailyOrdersRemaining}
+                      maxDailyOrderCount={maxDailyOrderCount}
                       usdExchangeRate={config.usdExchangeRate}
                       balanceRatio={config.balanceRatio}
                       locale={locale}
@@ -1069,6 +1117,75 @@ function PayContent() {
           dark={isDark}
           locale={locale}
         />
+      )}
+
+      {/* 关闭充值确认弹窗 */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+          <div
+            className={[
+              'w-full max-w-sm rounded-2xl border p-6 shadow-xl',
+              isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white',
+            ].join(' ')}
+          >
+            <h3
+              className={['text-lg font-semibold mb-3', isDark ? 'text-slate-100' : 'text-slate-900'].join(' ')}
+            >
+              {pickLocaleText(locale, '确认离开？', 'Leave payment?')}
+            </h3>
+            <p className={['text-sm mb-1', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
+              {dailyOrdersRemaining > 0
+                ? pickLocaleText(
+                    locale,
+                    `您今日还剩 ${dailyOrdersRemaining} 次充值机会（每日最多 ${maxDailyOrderCount} 次）。`,
+                    `You have ${dailyOrdersRemaining} recharge attempt(s) remaining today (max ${maxDailyOrderCount}/day).`,
+                  )
+                : pickLocaleText(
+                    locale,
+                    `您今日充值次数已用完（每日最多 ${maxDailyOrderCount} 次），离开后今日将无法再充值！`,
+                    `You have used all recharge attempts today (max ${maxDailyOrderCount}/day). You will NOT be able to recharge again today!`,
+                  )}
+            </p>
+            {dailyOrdersRemaining === 0 && (
+              <p
+                className={[
+                  'text-sm font-medium mb-4',
+                  isDark ? 'text-red-400' : 'text-red-600',
+                ].join(' ')}
+              >
+                {pickLocaleText(
+                  locale,
+                  '请务必完成当前支付！',
+                  'Please complete this payment!',
+                )}
+              </p>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className={[
+                  'flex-1 rounded-lg py-2.5 text-sm font-medium',
+                  isDark
+                    ? 'bg-blue-600 text-white hover:bg-blue-500'
+                    : 'bg-blue-600 text-white hover:bg-blue-700',
+                ].join(' ')}
+              >
+                {pickLocaleText(locale, '继续支付', 'Continue Payment')}
+              </button>
+              <button
+                onClick={doBack}
+                className={[
+                  'flex-1 rounded-lg border py-2.5 text-sm font-medium',
+                  isDark
+                    ? 'border-slate-600 text-slate-300 hover:bg-slate-700'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                ].join(' ')}
+              >
+                {pickLocaleText(locale, '确认离开', 'Leave')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 帮助图片放大 */}
