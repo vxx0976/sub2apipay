@@ -110,7 +110,6 @@ const envSchema = z.object({
         .filter(Boolean),
     ),
 
-
   // ── 支付方式前端描述（sublabel）覆盖，不设置则使用默认值 ──
   PAYMENT_SUBLABEL_ALIPAY: optionalTrimmedString,
   PAYMENT_SUBLABEL_ALIPAY_DIRECT: optionalTrimmedString,

@@ -318,7 +318,7 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
       // 订阅订单优先使用套餐自定义商品名称
       paymentSubject = subscriptionPlan.productName || `Sub2API 订阅 ${subscriptionGroupName || subscriptionPlan.name}`;
     } else {
-    // 余额订单：按卖价计算到账 USD（优先用 _x_sp，兜底用 env.SELLING_PRICE）
+      // 余额订单：按卖价计算到账 USD（优先用 _x_sp，兜底用 env.SELLING_PRICE）
       const sp = input.sellingPrice ?? env.SELLING_PRICE;
       const creditUsdForSubject = Math.round((input.amount / sp) * 100) / 100;
       // 支持前缀/后缀配置
@@ -372,9 +372,8 @@ export async function createOrder(input: CreateOrderInput): Promise<CreateOrderR
     });
 
     // 计算今日剩余下单次数（事务内已统计 _dailyOrderCount，加上刚创建的这笔）
-    const dailyOrdersRemaining = env.MAX_DAILY_ORDER_COUNT > 0
-      ? Math.max(0, env.MAX_DAILY_ORDER_COUNT - order._dailyOrderCount - 1)
-      : -1; // -1 表示不限制
+    const dailyOrdersRemaining =
+      env.MAX_DAILY_ORDER_COUNT > 0 ? Math.max(0, env.MAX_DAILY_ORDER_COUNT - order._dailyOrderCount - 1) : -1; // -1 表示不限制
 
     return {
       orderId: order.id,
@@ -845,12 +844,7 @@ export async function executeRecharge(orderId: string): Promise<void> {
   const creditUsd = Math.round((Number(order.amount) / sp) * 100) / 100;
 
   try {
-    await createAndRedeem(
-      order.rechargeCode,
-      creditUsd,
-      order.userId,
-      `sub2apipay recharge order:${orderId}`,
-    );
+    await createAndRedeem(order.rechargeCode, creditUsd, order.userId, `sub2apipay recharge order:${orderId}`);
 
     await prisma.order.updateMany({
       where: { id: orderId, status: ORDER_STATUS.RECHARGING },

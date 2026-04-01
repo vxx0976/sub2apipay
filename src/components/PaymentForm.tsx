@@ -68,8 +68,8 @@ export default function PaymentForm({
   maxDailyOrderCount = 0,
 }: PaymentFormProps) {
   const [paymentType, setPaymentType] = useState(enabledPaymentTypes[0] || 'alipay');
-  const [creditText, setCreditText] = useState('');  // 到账余额 USD
-  const [cnyText, setCnyText] = useState('');          // 实付 CNY
+  const [creditText, setCreditText] = useState(''); // 到账余额 USD
+  const [cnyText, setCnyText] = useState(''); // 实付 CNY
 
   const effectivePaymentType = enabledPaymentTypes.includes(paymentType)
     ? paymentType
@@ -82,15 +82,15 @@ export default function PaymentForm({
   const effectiveMax = methodSingleMax !== undefined && methodSingleMax > 0 ? methodSingleMax : maxAmount;
 
   const isValid =
-    cnyAmount >= minAmount &&
-    cnyAmount <= effectiveMax &&
-    hasValidCentPrecision(cnyAmount) &&
-    isMethodAvailable;
+    cnyAmount >= minAmount && cnyAmount <= effectiveMax && hasValidCentPrecision(cnyAmount) && isMethodAvailable;
 
   const handleCreditChange = (val: string) => {
     if (!AMOUNT_TEXT_PATTERN.test(val)) return;
     setCreditText(val);
-    if (val === '' || val === '.') { setCnyText(''); return; }
+    if (val === '' || val === '.') {
+      setCnyText('');
+      return;
+    }
     const num = parseFloat(val);
     if (!isNaN(num) && num > 0) {
       setCnyText(((num / balanceRatio) * usdExchangeRate).toFixed(2));
@@ -100,7 +100,10 @@ export default function PaymentForm({
   const handleCnyChange = (val: string) => {
     if (!AMOUNT_TEXT_PATTERN.test(val)) return;
     setCnyText(val);
-    if (val === '' || val === '.') { setCreditText(''); return; }
+    if (val === '' || val === '.') {
+      setCreditText('');
+      return;
+    }
     const num = parseFloat(val);
     if (!isNaN(num) && num > 0) {
       setCreditText(((num / usdExchangeRate) * balanceRatio).toFixed(2));
@@ -266,21 +269,22 @@ export default function PaymentForm({
             </div>
           </div>
 
-          {cnyText !== '' && !isValid && (() => {
-            const num = parseFloat(cnyText);
-            let msg = locale === 'en'
-              ? 'Amount must be within range and support up to 2 decimal places'
-              : '金额需在范围内，且最多支持 2 位小数（精确到分）';
-            if (!isNaN(num)) {
-              if (num < minAmount) msg = locale === 'en'
-                ? `Minimum per transaction: ¥${minAmount}`
-                : `单笔最低充值 ¥${minAmount}`;
-              else if (num > effectiveMax) msg = locale === 'en'
-                ? `Maximum per transaction: ¥${effectiveMax}`
-                : `单笔最高充值 ¥${effectiveMax}`;
-            }
-            return <div className={['text-xs', dark ? 'text-amber-300' : 'text-amber-700'].join(' ')}>{msg}</div>;
-          })()}
+          {cnyText !== '' &&
+            !isValid &&
+            (() => {
+              const num = parseFloat(cnyText);
+              let msg =
+                locale === 'en'
+                  ? 'Amount must be within range and support up to 2 decimal places'
+                  : '金额需在范围内，且最多支持 2 位小数（精确到分）';
+              if (!isNaN(num)) {
+                if (num < minAmount)
+                  msg = locale === 'en' ? `Minimum per transaction: ¥${minAmount}` : `单笔最低充值 ¥${minAmount}`;
+                else if (num > effectiveMax)
+                  msg = locale === 'en' ? `Maximum per transaction: ¥${effectiveMax}` : `单笔最高充值 ¥${effectiveMax}`;
+              }
+              return <div className={['text-xs', dark ? 'text-amber-300' : 'text-amber-700'].join(' ')}>{msg}</div>;
+            })()}
         </>
       )}
 
@@ -410,22 +414,30 @@ export default function PaymentForm({
         }`}
       >
         {loading
-          ? locale === 'en' ? 'Processing...' : '处理中...'
+          ? locale === 'en'
+            ? 'Processing...'
+            : '处理中...'
           : dailyOrdersBlocked
-            ? locale === 'en' ? 'Daily limit reached' : '今日次数已用完'
+            ? locale === 'en'
+              ? 'Daily limit reached'
+              : '今日次数已用完'
             : pendingBlocked
-              ? locale === 'en' ? 'Too many pending orders' : '待支付订单过多'
+              ? locale === 'en'
+                ? 'Too many pending orders'
+                : '待支付订单过多'
               : isValid
-              ? (() => {
-                  const creditUsd = fixedAmount
-                    ? ((fixedAmount / usdExchangeRate) * balanceRatio)
-                    : parseFloat(creditText);
-                  const creditStr = isNaN(creditUsd) ? '—' : creditUsd.toFixed(2);
-                  return locale === 'en'
-                    ? `Pay Now ¥${cnyAmount.toFixed(2)} → $${creditStr} USD`
-                    : `立即支付 ¥${cnyAmount.toFixed(2)} → 到账 $${creditStr} USD`;
-                })()
-              : locale === 'en' ? 'Pay Now' : '立即支付'}
+                ? (() => {
+                    const creditUsd = fixedAmount
+                      ? (fixedAmount / usdExchangeRate) * balanceRatio
+                      : parseFloat(creditText);
+                    const creditStr = isNaN(creditUsd) ? '—' : creditUsd.toFixed(2);
+                    return locale === 'en'
+                      ? `Pay Now ¥${cnyAmount.toFixed(2)} → $${creditStr} USD`
+                      : `立即支付 ¥${cnyAmount.toFixed(2)} → 到账 $${creditStr} USD`;
+                  })()
+                : locale === 'en'
+                  ? 'Pay Now'
+                  : '立即支付'}
       </button>
     </form>
   );

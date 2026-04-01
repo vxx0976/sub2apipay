@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     const balanceDisabled = balanceDisabledVal === 'true';
 
     // 使用 sub2api 平台卖价（_x_sp），兜底使用环境变量 SELLING_PRICE
-    const sellingPrice = (tokenUser._x_sp && tokenUser._x_sp > 0) ? tokenUser._x_sp : env.SELLING_PRICE;
+    const sellingPrice = tokenUser._x_sp && tokenUser._x_sp > 0 ? tokenUser._x_sp : env.SELLING_PRICE;
 
     // 收集 sublabel 覆盖
     const sublabelOverrides: Record<string, string> = {};

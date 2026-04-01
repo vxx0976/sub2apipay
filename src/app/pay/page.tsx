@@ -1128,9 +1128,7 @@ function PayContent() {
               isDark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white',
             ].join(' ')}
           >
-            <h3
-              className={['text-lg font-semibold mb-3', isDark ? 'text-slate-100' : 'text-slate-900'].join(' ')}
-            >
+            <h3 className={['text-lg font-semibold mb-3', isDark ? 'text-slate-100' : 'text-slate-900'].join(' ')}>
               {pickLocaleText(locale, '确认离开？', 'Leave payment?')}
             </h3>
             <p className={['text-sm mb-1', isDark ? 'text-slate-300' : 'text-slate-600'].join(' ')}>
@@ -1147,17 +1145,8 @@ function PayContent() {
                   )}
             </p>
             {dailyOrdersRemaining === 0 && (
-              <p
-                className={[
-                  'text-sm font-medium mb-4',
-                  isDark ? 'text-red-400' : 'text-red-600',
-                ].join(' ')}
-              >
-                {pickLocaleText(
-                  locale,
-                  '请务必完成当前支付！',
-                  'Please complete this payment!',
-                )}
+              <p className={['text-sm font-medium mb-4', isDark ? 'text-red-400' : 'text-red-600'].join(' ')}>
+                {pickLocaleText(locale, '请务必完成当前支付！', 'Please complete this payment!')}
               </p>
             )}
             <div className="flex gap-3 mt-4">
@@ -1165,9 +1154,7 @@ function PayContent() {
                 onClick={() => setShowCloseConfirm(false)}
                 className={[
                   'flex-1 rounded-lg py-2.5 text-sm font-medium',
-                  isDark
-                    ? 'bg-blue-600 text-white hover:bg-blue-500'
-                    : 'bg-blue-600 text-white hover:bg-blue-700',
+                  isDark ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-700',
                 ].join(' ')}
               >
                 {pickLocaleText(locale, '继续支付', 'Continue Payment')}
