@@ -27,6 +27,6 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: 602783258/sub2apipay:dev
+          tags: vxx0976/sub2apipay:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
